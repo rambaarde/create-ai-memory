@@ -4,7 +4,7 @@
 
 **The persistent memory layer for AI coding agents. One Markdown vault, every CLI.**
 
-Your agent forgets everything the moment a session ends. ai-memory gives Claude
+Your agent forgets everything the moment a session ends. create-ai-memory gives Claude
 Code, Codex, Gemini, Cursor, and opencode a shared second brain: a plain-Markdown
 vault that carries your profile, each project's context, and where you left off
 into every new session, on its own.
@@ -61,7 +61,7 @@ Memory sits in three layers, each injected at the right scope:
 | **Project** | `_projects/<repo>.md` | sessions in that repo | purpose, architecture, constraints, active decisions |
 | **Session** | `_session_logs/<repo>/<timestamp>.md` | next session as carryover | what changed, blockers, next steps |
 
-When you run a launcher, ai-memory assembles those layers into one prompt and
+When you run a launcher, create-ai-memory assembles those layers into one prompt and
 hands it to the agent as its opening message:
 
 ```
@@ -179,7 +179,7 @@ off last time.
 | **Automatic carryover** | A Stop hook writes the branch, the commits you made, and uncommitted changes into the session log, so tomorrow's run resumes where today's ended. |
 | **Per-project context** | Each git repo gets its own note for purpose, architecture, and decisions, injected only for that project. |
 | **Your rules, everywhere** | A global profile and standards note ride along in every session, on every project. |
-| **Session skills you define** | Register your own y/n launch options (terse output, design review, minimal-code). ai-memory ships none; they are yours. |
+| **Session skills you define** | Register your own y/n launch options (terse output, design review, minimal-code). create-ai-memory ships none; they are yours. |
 | **Open agent model** | Adapters are three lines. Add opencode, aider, or anything with a CLI without touching the core. |
 | **Obsidian-native** | The vault is plain Markdown, so it opens as an Obsidian second brain with graph view and backlinks, or as plain files with grep. |
 | **Guardrails built in** | Every write is checked to stay inside the vault, and a commit hook refuses commits made without the vault context loaded. |
@@ -238,7 +238,7 @@ Project is auto-resolved from the current git repo; pass a name to override.
 
 ## Session skills (optional)
 
-You define your own per-session skills; ai-memory ships none. At launch it asks
+You define your own per-session skills; create-ai-memory ships none. At launch it asks
 y/n for each skill you registered, then injects the chosen instruction blocks into
 the agent (and for Cursor, writes them as a managed always-apply rule). Register
 nothing and every session is plain.
@@ -257,6 +257,40 @@ source "$HOME/ai-memory/shell/ai-mem.zsh"
 
 The injected block applies for the whole run, so a session's chosen skills persist
 as instructions across every change the agent makes.
+
+### Recommended skills to wire in
+
+These are the session skills worth having on the picker. Each maps to a working
+Claude Code skill; if you have the skill installed, the block below tells the agent
+to use it, and the behavior still applies to agents that do not have the skill
+because the instruction is inlined. Drop them into `AI_MEM_SKILLS` and reorder to
+taste.
+
+```zsh
+typeset -gA AI_MEM_SKILLS
+
+# caveman: terse, no-filler output
+AI_MEM_SKILLS[caveman]='Terse output (caveman) this session?::Respond terse like a smart caveman. Keep technical substance exact; drop filler, pleasantries, and hedging.'
+
+# ponytail: the laziest solution that actually works (stdlib > deps, one line > fifty)
+AI_MEM_SKILLS[ponytail]='Minimal-code (ponytail) this session?::Use the ponytail approach. Prefer the standard library before new code, native platform features before dependencies, and one line before fifty. Question whether the task needs to exist at all (YAGNI).'
+
+# hallmark: anti-AI-slop UI and frontend design
+AI_MEM_SKILLS[hallmark]='Strict UI design (hallmark) this session?::Use the hallmark approach for any frontend, UI, or design work. Avoid generic AI-slop layouts; make type, spacing, color, and hierarchy intentional.'
+
+AI_MEM_SKILL_ORDER=(caveman ponytail hallmark)
+
+source "$HOME/ai-memory/shell/ai-mem.zsh"
+```
+
+| Skill | What it does | Reach for it when |
+|---|---|---|
+| **caveman** | Strips output to terse, no-filler answers | You want signal over prose |
+| **ponytail** | Pushes the smallest change that works; stdlib and native features over dependencies | Building features or reviewing for over-engineering |
+| **hallmark** | Anti-AI-slop design discipline for UI and frontend work | Any visual or frontend task |
+
+Skills are per session and independent, so you can turn on `ponytail` for a
+refactor and add `hallmark` only when you touch the UI.
 
 ## Your vault
 
@@ -336,7 +370,7 @@ git -C <repo> config core.hooksPath .githooks
 
 ## Why plain files
 
-ai-memory is deliberately small. There is no server to run, no container to pull,
+create-ai-memory is deliberately small. There is no server to run, no container to pull,
 no database to migrate, no API key to store. The design choices behind that:
 
 - **The vault is the source of truth; the chat is disposable.** Durable state
@@ -352,7 +386,7 @@ no database to migrate, no API key to store. The design choices behind that:
   moving between projects in one shell never pins the wrong project.
 
 If you want an auto-capturing server with a web UI and vector search, other tools
-do that. ai-memory trades those for something you can read end to end in an
+do that. create-ai-memory trades those for something you can read end to end in an
 afternoon and carry anywhere.
 
 ## Tests
@@ -374,7 +408,7 @@ zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ## FAQ
 
 **Does it send my code anywhere?**
-No. ai-memory is shell functions plus Markdown files on your disk. The only network
+No. create-ai-memory is shell functions plus Markdown files on your disk. The only network
 calls are the ones your agent already makes.
 
 **Do I need Obsidian?**
@@ -382,14 +416,14 @@ No. The vault is plain Markdown. Obsidian is a nice way to browse it, not a
 requirement.
 
 **Do I need an API key or a paid plan?**
-No. ai-memory itself needs neither. Your agents use whatever auth they already have.
+No. create-ai-memory itself needs neither. Your agents use whatever auth they already have.
 
 **Which shells and platforms?**
 zsh today, on macOS and Linux (including WSL). A bash port is on the roadmap.
 
 **Does plain `claude` still work?**
 Yes. Only the `*-start` launchers inject memory; plain runs are untouched, and the
-hooks no-op unless a session was launched through ai-memory.
+hooks no-op unless a session was launched through create-ai-memory.
 
 **Can I use my existing Obsidian vault?**
 Yes. Point `AI_MEM_ROOT` at it. Notes are additive and never overwrite your files.
