@@ -283,14 +283,19 @@ AI_MEM_SKILL_ORDER=(caveman ponytail hallmark)
 source "$HOME/ai-memory/shell/ai-mem.zsh"
 ```
 
-| Skill | What it does | Reach for it when |
-|---|---|---|
-| **caveman** | Strips output to terse, no-filler answers | You want signal over prose |
-| **ponytail** | Pushes the smallest change that works; stdlib and native features over dependencies | Building features or reviewing for over-engineering |
-| **hallmark** | Anti-AI-slop design discipline for UI and frontend work | Any visual or frontend task |
+| Skill | What it does | Reach for it when | Source |
+|---|---|---|---|
+| **caveman** | Strips output to terse, no-filler answers | You want signal over prose | [caveman.so](https://caveman.so/) |
+| **ponytail** | Pushes the smallest change that works; stdlib and native features over dependencies | Building features or reviewing for over-engineering | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) |
+| **hallmark** | Anti-AI-slop design discipline for UI and frontend work | Any visual or frontend task | [usehallmark.com](https://www.usehallmark.com/) |
 
 Skills are per session and independent, so you can turn on `ponytail` for a
-refactor and add `hallmark` only when you touch the UI.
+refactor and add `hallmark` only when you touch the UI. These are separate,
+installable Claude Code skills; the blocks above inline their behavior so a
+session still benefits even on an agent that does not have the skill installed.
+
+If you want a queryable knowledge graph of your codebase alongside your memory,
+pair create-ai-memory with [graphify](https://github.com/safishamsi/graphify).
 
 ## Your vault
 
