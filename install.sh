@@ -98,13 +98,15 @@ fi
 LINES="$LINES
 source \"$HERE/shell/ai-mem.zsh\""
 
-RC="$HOME/.zshrc"
+# Honor ZDOTDIR: power users relocate their zsh config, and zsh reads
+# $ZDOTDIR/.zshrc, not ~/.zshrc, when ZDOTDIR is set.
+RC="${ZDOTDIR:-$HOME}/.zshrc"
 SOURCE_LINE="source \"$HERE/shell/ai-mem.zsh\""
 
 echo
 if [ -f "$RC" ] && grep -qF "$SOURCE_LINE" "$RC"; then
-  echo "  ~/.zshrc already sources ai-memory; leaving it untouched."
-elif confirm "Append the setup lines to ~/.zshrc now?"; then
+  echo "  $RC already sources ai-memory; leaving it untouched."
+elif confirm "Append the setup lines to $RC now?"; then
   { printf '\n# ai-memory (https://github.com/rambaarde/create-ai-memory)\n'; printf '%s\n' "$LINES"; } >> "$RC"
   echo "  added to $RC"
   echo
@@ -112,7 +114,7 @@ elif confirm "Append the setup lines to ~/.zshrc now?"; then
 else
   cat <<EOF
 
-  Add these lines to your ~/.zshrc yourself:
+  Add these lines to your $RC yourself:
 
 $(printf '%s\n' "$LINES" | sed 's/^/    /')
 EOF
