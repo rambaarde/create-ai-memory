@@ -36,7 +36,7 @@ export AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory"
 # the picker pick them up. The adapter just records the prompt it was handed.
 CAPTURE="$(mktemp)"
 _ai_adapter_faketest() { print -r -- "$1" > "$CAPTURE"; }
-export AI_MEM_AGENTS="claude codex gemini cursor faketest"
+export AI_MEM_AGENTS="claude codex gemini cursor opencode faketest"
 typeset -gA AI_MEM_SKILLS
 AI_MEM_SKILLS[terse]='Use terse output this session?::Respond tersely; drop filler.'
 AI_MEM_SKILL_ORDER=(terse)
@@ -95,7 +95,7 @@ is "$(printf 'n\n' | _ai_session_modes_pick)" ""                "picker drops a 
 has "$(_ai_session_modes_instructions terse)" "Respond tersely" "instructions inject the chosen skill's block"
 
 # --- 7. launcher generation ---------------------------------------------------
-for a in claude codex gemini cursor faketest; do
+for a in claude codex gemini cursor opencode faketest; do
   succeeds "typeset -f ${a}-start" "generated launcher: ${a}-start"
 done
 fails 'typeset -f bogus-start' "no launcher for an unregistered agent"

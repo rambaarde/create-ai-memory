@@ -59,8 +59,17 @@ _ai_adapter_cursor() {
     fi
 }
 
-# --- Example: uncomment and add "opencode" to AI_MEM_AGENTS to enable ---
-# _ai_adapter_opencode() {
+# opencode (sst/opencode): the TUI seeds its first message from --prompt. It has
+# no --add-dir, so vault access rides on the inlined profile/standards in the
+# prompt plus the absolute note paths the agent can read on demand.
+_ai_adapter_opencode() {
+    local memory_prompt="$1"
+    opencode --prompt "$memory_prompt"
+}
+
+# --- Example: add another agent by defining its adapter and listing it in
+# AI_MEM_AGENTS. aider takes the initial instruction via --message:
+# _ai_adapter_aider() {
 #     local memory_prompt="$1"
-#     opencode --prompt "$memory_prompt"
+#     aider --message "$memory_prompt"
 # }

@@ -4,8 +4,8 @@
 
 **Persistent, agent-agnostic session memory for AI coding CLIs. One Markdown vault, any agent.**
 
-Give Claude Code, Codex, Gemini, and Cursor a shared second brain that survives
-across sessions: durable profile, per-project context, and last-session carryover,
+Give Claude Code, Codex, Gemini, Cursor, and opencode a shared second brain that
+survives across sessions: durable profile, per-project context, and last-session carryover,
 injected at launch. The vault is the source of truth; the chat is disposable.
 
 ![zsh](https://img.shields.io/badge/shell-zsh-89e051)
@@ -107,11 +107,24 @@ exec zsh
 Then, from inside any git repo:
 
 ```sh
-claude-start                    # or codex-start / gemini-start / cursor-start
+claude-start                    # or codex-start / gemini-start / cursor-start / opencode-start
 ```
 
 The agent opens already knowing your standards, this project, and where you left
 off last time.
+
+## Contents
+
+- [Install](#install)
+- [Commands](#commands)
+- [Session skills](#session-skills-optional)
+- [Vault layout](#vault-layout)
+- [Adding a new agent](#adding-a-new-agent)
+- [Optional integrations](#optional-integrations)
+- [Configuration](#configuration)
+- [Tests](#tests)
+- [Design notes](#design-notes)
+- [Roadmap](#roadmap)
 
 ## Install
 
@@ -158,7 +171,7 @@ The `npm/` package is a thin bootstrapper that clones the repo and runs the same
 
 | Command | What it does |
 |---|---|
-| `claude-start` · `codex-start` · `gemini-start` · `cursor-start` | Launch an agent with full vault context and the session-skill picker |
+| `claude-start` · `codex-start` · `gemini-start` · `cursor-start` · `opencode-start` | Launch an agent with full vault context and the session-skill picker |
 | `ai-start [project]` | Prepare the session (project note and fresh log) without launching an agent |
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
@@ -209,21 +222,22 @@ are sanitized placeholders.
 ## Adding a new agent
 
 Launchers aren't hardcoded. Each agent is one small adapter, and the
-`<name>-start` function is generated for you. To add `opencode`, aider, etc.:
+`<name>-start` function is generated for you. `claude`, `codex`, `gemini`,
+`cursor`, and `opencode` ship built in. To add another, say `aider`:
 
 1. Define the adapter in `shell/adapters.zsh`. It receives `$1` memory prompt,
    `$2` mode block, and `$3` onward extra args:
    ```zsh
-   _ai_adapter_opencode() {
+   _ai_adapter_aider() {
        local memory_prompt="$1"
-       opencode --prompt "$memory_prompt"
+       aider --message "$memory_prompt"
    }
    ```
 2. Register it in `~/.zshrc` before sourcing, or edit the default:
    ```zsh
-   export AI_MEM_AGENTS="claude codex gemini cursor opencode"
+   export AI_MEM_AGENTS="claude codex gemini cursor opencode aider"
    ```
-3. `opencode-start` now exists. No core edits.
+3. `aider-start` now exists. No core edits.
 
 ## Optional integrations
 
@@ -255,7 +269,7 @@ git -C <repo> config core.hooksPath .githooks
 | Env var | Default | Purpose |
 |---|---|---|
 | `AI_MEM_ROOT` | `$HOME/.ai-memory/_Ai_Memory` | Vault root. Point at any folder, including an existing Obsidian vault |
-| `AI_MEM_AGENTS` | `claude codex gemini cursor` | Space-separated agents to generate `-start` functions for |
+| `AI_MEM_AGENTS` | `claude codex gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 
 ## Tests
