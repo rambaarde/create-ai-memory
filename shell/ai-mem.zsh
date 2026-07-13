@@ -1,7 +1,7 @@
 # === AI CLI + Obsidian memory ===
 # Portable, agent-agnostic session memory. Source this from ~/.zshrc after
 # exporting AI_MEM_ROOT to point at your vault. Zsh-only (uses print -r, ${(s)},
-# select). Add a new agent by defining _ai_adapter_<name> in adapters.zsh and
+# and associative arrays). Add a new agent by defining _ai_adapter_<name> in adapters.zsh and
 # listing it in AI_MEM_AGENTS; a matching <name>-start function is generated.
 
 # Directory holding this module, used to source sibling files.

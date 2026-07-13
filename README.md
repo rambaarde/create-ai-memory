@@ -226,7 +226,7 @@ git clone https://github.com/rambaarde/create-ai-memory.git ~/ai-memory
 ~/ai-memory/install.sh
 ```
 
-> **zsh only.** The module uses `print -r`, `${(s:|:)}`, and `select`. A bash
+> **zsh only.** The module uses `print -r`, `${(s:|:)}`, and associative arrays. A bash
 > port is welcome as a PR; see [Roadmap](#roadmap).
 
 ## Commands

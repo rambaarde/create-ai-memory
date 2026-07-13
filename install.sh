@@ -32,11 +32,14 @@ confirm() { # confirm <prompt>  -> 0 for yes; defaults to yes, and yes when pipe
   case "${__reply:-Y}" in [Nn]*) return 1 ;; *) return 0 ;; esac
 }
 
-# Color only when it lands in a real terminal that wants it.
+# Color only in a real terminal that actually supports 24-bit color. Terminals
+# that do not advertise truecolor (e.g. macOS Terminal.app) fall back to the
+# plain block art rather than rendering the gradient as wrong colors.
 supports_color() {
   [ "$INTERACTIVE" -eq 1 ] || return 1
   [ -z "${NO_COLOR:-}" ] || return 1
   [ "${TERM:-}" != "dumb" ] || return 1
+  case "${COLORTERM:-}" in truecolor|24bit) return 0 ;; *) return 1 ;; esac
 }
 
 # ANSI Shadow "AI MEMORY" with a teal->violet vertical gradient (24-bit color),
