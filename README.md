@@ -113,18 +113,48 @@ claude-start                    # or codex-start / gemini-start / cursor-start /
 The agent opens already knowing your standards, this project, and where you left
 off last time.
 
-## Contents
+## Table of contents
 
+<table>
+<tr>
+<td valign="top" width="33%">
+
+**Overview**
+
+- [The problem](#the-problem)
+- [How it works](#how-it-works)
+- [A session, start to finish](#a-session-start-to-finish)
+
+**Getting started**
+
+- [Quickstart](#quickstart)
 - [Install](#install)
 - [Commands](#commands)
+
+</td>
+<td valign="top" width="33%">
+
+**Reference**
+
 - [Session skills](#session-skills-optional)
 - [Vault layout](#vault-layout)
 - [Adding a new agent](#adding-a-new-agent)
 - [Optional integrations](#optional-integrations)
 - [Configuration](#configuration)
+
+</td>
+<td valign="top" width="33%">
+
+**Project**
+
 - [Tests](#tests)
 - [Design notes](#design-notes)
 - [Roadmap](#roadmap)
+- [License](#license)
+
+</td>
+</tr>
+</table>
 
 ## Install
 
