@@ -350,6 +350,14 @@ _ai_session_start() {
 
     local session_prompt="${*:-}"
 
+    # Fail fast with a clear message if the agent's CLI is missing, before a
+    # session log is created. Cursor is exempt: its adapter falls back to opening
+    # the app when the `cursor` CLI is absent.
+    if [[ "$launcher" != cursor ]] && ! command -v "$launcher" >/dev/null 2>&1; then
+        echo "ai-memory: '$launcher' CLI not found on PATH. Install it, or drop it from AI_MEM_AGENTS." >&2
+        return 1
+    fi
+
     local resolved
     resolved="$(_ai_mem_prepare_session)" || return 1
 

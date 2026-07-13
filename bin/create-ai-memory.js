@@ -31,11 +31,14 @@ for (const item of ITEMS) {
   if (existsSync(src)) cpSync(src, join(dest, item), { recursive: true });
 }
 
-// Hand off to the shell installer for the interactive setup.
-const r = spawnSync('sh', [join(dest, 'install.sh')], { stdio: 'inherit' });
+// Hand off to the shell installer for the interactive setup. Run it with bash,
+// not sh: install.sh is a bash script (arrays, printf -v, ${!var}) and would
+// fail under a POSIX sh such as dash, which is /bin/sh on Debian and Ubuntu.
+const installer = join(dest, 'install.sh');
+const r = spawnSync('bash', [installer], { stdio: 'inherit' });
 if (r.error) {
-  console.error(`create-ai-memory: could not run install.sh: ${r.error.message}`);
-  console.error(`Files are in ${dest}; run  sh ${join(dest, 'install.sh')}  yourself.`);
+  console.error(`create-ai-memory: could not run the installer with bash: ${r.error.message}`);
+  console.error(`Files are in ${dest}; run  bash ${installer}  yourself.`);
   process.exit(1);
 }
 process.exit(r.status ?? 0);

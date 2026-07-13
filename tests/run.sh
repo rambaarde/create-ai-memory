@@ -36,7 +36,9 @@ export AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory"
 # the picker pick them up. The adapter just records the prompt it was handed.
 CAPTURE="$(mktemp)"
 _ai_adapter_faketest() { print -r -- "$1" > "$CAPTURE"; }
-export AI_MEM_AGENTS="claude codex gemini cursor opencode faketest"
+faketest() { : }            # stub CLI so the missing-agent guard lets faketest through
+_ai_adapter_ghost() { : }   # adapter exists but there is no `ghost` CLI on PATH
+export AI_MEM_AGENTS="claude codex gemini cursor opencode faketest ghost"
 typeset -gA AI_MEM_SKILLS
 AI_MEM_SKILLS[terse]='Use terse output this session?::Respond tersely; drop filler.'
 AI_MEM_SKILL_ORDER=(terse)
@@ -105,6 +107,14 @@ fails '_ai_session_start bogus </dev/null' "dispatch fails for an agent with no 
 faketest-start </dev/null >/dev/null 2>&1
 has "$(<"$CAPTURE")" "Read these notes before doing anything else:" "adapter receives the assembled memory prompt"
 has "$(<"$CAPTURE")" "demoproj"                                     "assembled prompt carries project context"
+
+# --- 8b. missing agent CLI is blocked before a session log is created ---------
+ghost_before="$(find "$AI_MEM_SESSION_DIR" -name 'demoproj-*.md' 2>/dev/null | wc -l | tr -d ' ')"
+ghost_out="$(ghost-start </dev/null 2>&1)"; ghost_rc=$?
+[[ $ghost_rc -ne 0 ]] && ok "missing agent CLI makes the launcher fail" || nok "missing agent CLI makes the launcher fail"
+has "$ghost_out" "not found on PATH" "missing agent CLI prints a clear message"
+ghost_after="$(find "$AI_MEM_SESSION_DIR" -name 'demoproj-*.md' 2>/dev/null | wc -l | tr -d ' ')"
+is "$ghost_after" "$ghost_before" "missing agent CLI creates no stray session log"
 
 # --- 9. ai-note appends under Live Notes -------------------------------------
 ai-note "wired the payment webhook" >/dev/null

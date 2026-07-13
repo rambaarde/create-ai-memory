@@ -17,7 +17,7 @@ npm create ai-memory@latest
 
 [![npm](https://img.shields.io/npm/v/create-ai-memory?color=cb3837&label=npm)](https://www.npmjs.com/package/create-ai-memory)
 ![zsh](https://img.shields.io/badge/shell-zsh-89e051)
-![tests](https://img.shields.io/badge/tests-35%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-38%20passing-brightgreen)
 ![deps](https://img.shields.io/badge/runtime%20deps-0-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![PRs](https://img.shields.io/badge/PRs-welcome-orange)
@@ -406,7 +406,7 @@ generation, adapter dispatch, the commit token, `ai-note`, and the cursor rule
 file.
 
 ```sh
-zsh tests/run.sh     # offline unit tests (35 assertions)
+zsh tests/run.sh     # offline unit tests (38 assertions)
 zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ```
 
