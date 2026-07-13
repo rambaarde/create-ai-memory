@@ -17,45 +17,6 @@ injected at launch. The vault is the source of truth; the chat is disposable.
 
 ---
 
-## Quickstart
-
-```sh
-git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
-~/ai-memory/install.sh          # banner + a couple of prompts, then you're set
-exec zsh
-```
-
-Now, from inside any git repo:
-
-```sh
-claude-start                    # or codex-start / gemini-start / cursor-start
-```
-
-That's it. The agent opens already knowing your standards, this project, and where
-you left off last time.
-
-## A session, start to finish
-
-```console
-$ cd ~/code/checkout-api
-$ claude-start
-  Use terse output this session? [y/N] n
-
-  # Claude launches pre-loaded with:
-  #   • your profile + coding standards + commit policy   (global)
-  #   • checkout-api: purpose, architecture, decisions    (project)
-  #   • "Next: wire the refund webhook"                   (last session's carryover)
-
-… you build the refund webhook, make a few commits …
-
-$ ai-note "refund webhook live; still need idempotency keys"   # jot mid-session
-
-# On exit, a hook stamps the session log with the branch, the commits you made,
-# and anything uncommitted. Tomorrow's claude-start picks up exactly there.
-```
-
-No copy-pasting context. No re-explaining the stack. No "where were we."
-
 ## The problem
 
 Every AI coding session starts from zero.
@@ -113,9 +74,48 @@ Memory sits in three layers, each injected at the right scope:
 One environment variable, `AI_MEM_ROOT`, points at the vault, so the system moves
 between machines by pointing at the same folder.
 
+## A session, start to finish
+
+```console
+$ cd ~/code/checkout-api
+$ claude-start
+  Use terse output this session? [y/N] n
+
+  # Claude launches pre-loaded with:
+  #   • your profile + coding standards + commit policy   (global)
+  #   • checkout-api: purpose, architecture, decisions    (project)
+  #   • "Next: wire the refund webhook"                   (last session's carryover)
+
+… you build the refund webhook, make a few commits …
+
+$ ai-note "refund webhook live; still need idempotency keys"   # jot mid-session
+
+# On exit, a hook stamps the session log with the branch, the commits you made,
+# and anything uncommitted. Tomorrow's claude-start picks up exactly there.
+```
+
+No copy-pasting context. No re-explaining the stack. No "where were we."
+
+## Quickstart
+
+```sh
+git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
+~/ai-memory/install.sh          # banner + a couple of prompts, then you're set
+exec zsh
+```
+
+Then, from inside any git repo:
+
+```sh
+claude-start                    # or codex-start / gemini-start / cursor-start
+```
+
+The agent opens already knowing your standards, this project, and where you left
+off last time.
+
 ## Install
 
-Pick whichever fits how you manage your shell. All three end at the same place.
+Pick whichever fits how you manage your shell. All paths end at the same place.
 
 **Clone and run** (source of truth, zero dependencies):
 
@@ -123,16 +123,6 @@ Pick whichever fits how you manage your shell. All three end at the same place.
 git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
 ~/ai-memory/install.sh
 ```
-
-**npm** (if you'd rather not clone by hand):
-
-```sh
-npm create ai-memory@latest      # or: npx create-ai-memory
-```
-
-The npm package is a thin bootstrapper: it clones the repo and runs the same
-`install.sh`, so the two paths never drift. Node 16+ is used only to bootstrap;
-the tool itself is node-free.
 
 **zsh plugin manager:**
 
@@ -150,6 +140,16 @@ Plugin-manager installs only source the module. That's fine: the vault
 auto-scaffolds from the shipped templates on first use, so `install.sh` is
 optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you don't want the default
 `~/.ai-memory/_Ai_Memory`.
+
+**npm** (bootstrapper; not published yet):
+
+```sh
+npm create ai-memory@latest      # once create-ai-memory is on npm
+```
+
+The `npm/` package is a thin bootstrapper that clones the repo and runs the same
+`install.sh`, so the paths never drift. It is not on npm yet; until it's published
+(`cd npm && npm publish --access public`), use clone-and-run or a plugin manager.
 
 > **zsh only.** The module uses `print -r`, `${(s:|:)}`, and `select`. A bash
 > port is welcome as a PR; see [Roadmap](#roadmap).
@@ -282,6 +282,7 @@ zsh tests/run.sh
 ## Roadmap
 
 - Bash port of the shell module.
+- Publish `create-ai-memory` to npm.
 - More agent adapters shipped by default: opencode, aider.
 - Optional cross-project index and search over session logs.
 
