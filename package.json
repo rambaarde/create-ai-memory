@@ -1,6 +1,6 @@
 {
   "name": "create-ai-memory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Persistent, agent-agnostic session memory for AI coding CLIs (Claude Code, Codex, Gemini, Cursor, opencode). One Markdown vault, any agent.",
   "bin": {
     "create-ai-memory": "bin/create-ai-memory.js"
