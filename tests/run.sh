@@ -112,6 +112,22 @@ today_log="$(_ai_mem_today_session_log demoproj)"
 has "$(<"$today_log")" "### Live Notes"           "ai-note creates the Live Notes section"
 has "$(<"$today_log")" "wired the payment webhook" "ai-note appends the note text"
 
+# --- 10. cursor adapter: writes/clears its managed rule file (no GUI) ---------
+# cursor has no headless prompt path; the adapter persists the session's skills
+# as an always-apply rule instead. Verify that offline with the GUI launch stubbed.
+CURSOR_HOME="$(mktemp -d)"; _OLDHOME="$HOME"; export HOME="$CURSOR_HOME"
+open()   { : ; }   # stub `open -a Cursor`
+cursor() { : ; }   # stub the cursor CLI if present
+CRULE="$HOME/.cursor/rules/_ai-session.mdc"
+_ai_adapter_cursor "mem" "SESSION SKILL BLOCK" </dev/null
+exists "$CRULE"                                "cursor adapter writes the managed rule file"
+has "$(<"$CRULE")" "SESSION SKILL BLOCK"       "cursor rule carries the session skill block"
+_ai_adapter_cursor "mem" "" </dev/null
+[[ ! -e "$CRULE" ]] && ok "cursor adapter clears the rule when no skills are chosen" \
+                    || nok "cursor adapter clears the rule when no skills are chosen"
+unfunction open cursor 2>/dev/null
+export HOME="$_OLDHOME"
+
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"

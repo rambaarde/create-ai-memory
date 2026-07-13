@@ -304,14 +304,18 @@ git -C <repo> config core.hooksPath .githooks
 
 ## Tests
 
-Pure zsh, no framework, no network. It spins up a throwaway vault and git repo and
-asserts path guarding, project resolution, session prep, the context prompt, the
-skill picker, launcher generation, adapter dispatch, the commit token, and
-`ai-note`.
+Offline unit suite (throwaway vault + git repo, no network): path guarding,
+project resolution, session prep, context prompt, skill picker, launcher
+generation, adapter dispatch, the commit token, and `ai-note`.
 
 ```sh
-zsh tests/run.sh
+zsh tests/run.sh     # offline unit tests
+zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ```
+
+`smoke.sh` makes real API calls, so each CLI must be installed and authed
+(opencode defaults to DeepSeek; set it up or pass
+`AIMEM_SMOKE_OPENCODE_MODEL=provider/model`).
 
 ## Design notes
 
