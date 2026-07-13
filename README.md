@@ -22,6 +22,10 @@ npm create ai-memory@latest
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![PRs](https://img.shields.io/badge/PRs-welcome-orange)
 
+<br>
+
+<img src="assets/demo.gif" alt="Installing create-ai-memory with npm create ai-memory@latest" width="820">
+
 </div>
 
 ---
