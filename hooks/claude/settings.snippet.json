@@ -1,0 +1,19 @@
+{
+  "_comment": "Merge into ~/.claude/settings.json. Replace <AI_MEM_HOME> with the absolute path to your ai-mem checkout (Claude Code does not expand env vars in hook commands). Both hooks no-op unless the session was launched via claude-start.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "<AI_MEM_HOME>/hooks/claude/session-start.sh" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "<AI_MEM_HOME>/hooks/claude/session-summary.sh" }
+        ]
+      }
+    ]
+  }
+}

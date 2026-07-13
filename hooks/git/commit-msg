@@ -1,0 +1,178 @@
+#!/bin/sh
+# Enforce Conventional Commits with a detailed body and an active vault-context
+# token for this repository.
+# Git-generated merge, revert, fixup, and squash commits are allowed so common
+# history maintenance workflows still work without manual overrides.
+set -eu
+
+commit_msg_file=${1:-}
+
+if [ -z "$commit_msg_file" ] || [ ! -f "$commit_msg_file" ]; then
+  echo "commit-msg: expected a commit message file path" >&2
+  exit 1
+fi
+
+first_subject=''
+body_line_count=0
+body_word_count=0
+state=need_separator
+subject_skipped=0
+
+is_footer_line() {
+  case $1 in
+    BREAKING\ CHANGE:*|Signed-off-by:*|Co-authored-by:*|Reviewed-by:*|Acked-by:*|Refs\ *|Fixes\ *|Closes\ *|Resolves\ *)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+require_vault_context() {
+  local repo_root project_name ready_dir ready_file ready_token
+
+  if [ -z "${AI_MEM_ROOT:-}" ]; then
+    echo "commit-msg: AI_MEM_ROOT is not set; run ai-context first" >&2
+    return 1
+  fi
+
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  project_name="$(basename "$repo_root")"
+  ready_dir="$AI_MEM_ROOT/_session_logs/.context-ready"
+  ready_file="$ready_dir/$project_name.token"
+
+  if [ ! -f "$ready_file" ]; then
+    echo "commit-msg: load the vault context first with ai-context" >&2
+    return 1
+  fi
+
+  if [ -z "${AI_MEM_CONTEXT_TOKEN:-}" ]; then
+    echo "commit-msg: this shell has not loaded the vault context; run ai-context first" >&2
+    return 1
+  fi
+
+  ready_token="$(sed -n '1p' "$ready_file")"
+
+  if [ "$ready_token" != "$AI_MEM_CONTEXT_TOKEN" ]; then
+    echo "commit-msg: this shell's vault context token does not match the active session; rerun ai-context" >&2
+    return 1
+  fi
+}
+
+while IFS= read -r line || [ -n "$line" ]; do
+  case $line in
+    '')
+      continue
+      ;;
+    '#'*)
+      continue
+      ;;
+  esac
+  first_subject=$line
+  break
+done < "$commit_msg_file"
+
+if [ -z "$first_subject" ]; then
+  echo "commit-msg: commit message is empty" >&2
+  exit 1
+fi
+
+case $first_subject in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *)
+    exit 0
+    ;;
+esac
+
+if printf '%s\n' "$first_subject" | grep -Eq '^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(\([^()[:space:]][^()[:space:]]*\))?(!)?: [^[:space:]].*$'; then
+  :
+else
+  cat >&2 <<'EOF'
+Commit message rejected.
+
+Use Conventional Commits:
+  type(scope): description
+
+Use a structured body after a blank line:
+  - short summary paragraph
+  - optional Why / Cause paragraph
+  - `-` bullet concrete changes or defenses
+  - optional notes or follow-up
+
+Examples:
+  feat(tmux): add session color sync
+  fix(zsh): avoid duplicate prompt initialization
+  docs(memory): clarify commit policy
+
+Allowed types:
+  feat, fix, docs, style, refactor, perf, test, chore, build, ci, revert
+
+Git-generated Merge, Revert, fixup!, and squash! messages are allowed.
+EOF
+
+  exit 1
+fi
+
+while IFS= read -r line || [ -n "$line" ]; do
+  case $line in
+    '#'*)
+      continue
+      ;;
+  esac
+
+  if [ "$subject_skipped" -eq 0 ]; then
+    case $line in
+      '')
+        continue
+        ;;
+    esac
+    subject_skipped=1
+    continue
+  fi
+
+  if [ "$state" = need_separator ]; then
+    if [ -z "$line" ]; then
+      state=body
+      continue
+    fi
+
+    echo "commit-msg: add a blank line after the subject, then a detailed body" >&2
+    exit 1
+  fi
+
+  if [ "$state" = footer ]; then
+    continue
+  fi
+
+  if [ -z "$line" ]; then
+    continue
+  fi
+
+  if is_footer_line "$line"; then
+    if [ "$body_line_count" -eq 0 ]; then
+      echo "commit-msg: add a detailed body before footers" >&2
+      exit 1
+    fi
+    state=footer
+    continue
+  fi
+
+  body_line_count=$((body_line_count + 1))
+  words=$(printf '%s\n' "$line" | awk '{print NF}')
+  body_word_count=$((body_word_count + words))
+done < "$commit_msg_file"
+
+if [ "$body_line_count" -eq 0 ]; then
+  echo "commit-msg: commit message needs a structured body, not just a title" >&2
+  exit 1
+fi
+
+if [ "$body_line_count" -lt 2 ] && [ "$body_word_count" -lt 20 ]; then
+  echo "commit-msg: body is too short; add a summary and - bullet changes or defenses" >&2
+  exit 1
+fi
+
+if ! require_vault_context; then
+  exit 1
+fi
+
+exit 0

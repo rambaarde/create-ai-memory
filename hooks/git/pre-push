@@ -1,0 +1,19 @@
+#!/bin/sh
+# Block pushes that target the production branch unless an explicit override is
+# set for an emergency release.
+set -eu
+
+allow_main_push=${ALLOW_PUSH_TO_MAIN:-}
+
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+  case $remote_ref in
+    refs/heads/main)
+      if [ "$allow_main_push" != "1" ]; then
+        echo "pre-push: push to main blocked; use a topic branch or set ALLOW_PUSH_TO_MAIN=1 for an explicit override" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+exit 0
