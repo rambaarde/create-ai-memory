@@ -7,6 +7,10 @@
 # Directory holding this module, used to source sibling files.
 AI_MEM_HOME="${0:A:h}"
 
+# Where the shipped example notes and templates live, used to auto-scaffold a
+# vault on first use so install.sh is optional (plugin-manager installs work).
+AI_MEM_TEMPLATE_SRC="${AI_MEM_HOME:h}/vault-template"
+
 # Vault root. Override in ~/.zshrc; defaults to a hidden dir under $HOME.
 : "${AI_MEM_ROOT:=$HOME/.ai-memory/_Ai_Memory}"
 if [[ -d "$AI_MEM_ROOT" ]]; then
@@ -126,11 +130,30 @@ _ai_mem_latest_session_log() {
     fi
 }
 
+# Copy the shipped profile, standards, and templates into the vault on first use.
+# Idempotent and additive: it never overwrites a file the user already has, so a
+# plugin-manager install (source only, no install.sh) still gets a working vault.
+_ai_mem_ensure_vault() {
+    [[ -d "$AI_MEM_TEMPLATE_SRC" ]] || return 0
+    mkdir -p "$AI_MEM_PROJECT_DIR" "$AI_MEM_SESSION_DIR"
+    local rel
+    for rel in _Global_Profile.md _Standards.md \
+               _projects/_project_template.md _session_logs/_session_template.md; do
+        local src="$AI_MEM_TEMPLATE_SRC/$rel" dst="$AI_MEM_ROOT/$rel"
+        if [[ -f "$src" && ! -f "$dst" ]]; then
+            _ai_mem_guard "$dst" || return 1
+            cp "$src" "$dst"
+        fi
+    done
+}
+
 _ai_mem_prepare_session() {
     local project_name="${1:-}"
     if [[ -z "$project_name" ]]; then
         project_name="$(_ai_mem_resolve_project)"
     fi
+
+    _ai_mem_ensure_vault || return 1
 
     local project_note="$AI_MEM_PROJECT_DIR/${project_name}.md"
     local project_session_dir
@@ -395,6 +418,8 @@ _ai_mem_today_session_log() {
     if [[ -z "$project_name" ]]; then
         project_name="$(_ai_mem_resolve_project)"
     fi
+
+    _ai_mem_ensure_vault || return 1
 
     local today
     today="$(date +%Y-%m-%d)"

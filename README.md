@@ -1,22 +1,69 @@
-# ai-mem
+<div align="center">
 
-**A persistent memory layer for AI coding agents. One Markdown vault, any CLI.**
+# ai-memory
+
+**Persistent, agent-agnostic session memory for AI coding CLIs. One Markdown vault, any agent.**
 
 Give Claude Code, Codex, Gemini, and Cursor a shared second brain that survives
-across sessions: durable profile, per-project context, and last-session
-carryover, injected at launch. The vault is the source of truth; the chat is
-disposable.
+across sessions: durable profile, per-project context, and last-session carryover,
+injected at launch. The vault is the source of truth; the chat is disposable.
+
+![zsh](https://img.shields.io/badge/shell-zsh-89e051)
+![tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
+![license](https://img.shields.io/badge/license-MIT-blue)
+![PRs](https://img.shields.io/badge/PRs-welcome-orange)
+
+</div>
 
 ---
+
+## Quickstart
+
+```sh
+git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
+~/ai-memory/install.sh          # banner + a couple of prompts, then you're set
+exec zsh
+```
+
+Now, from inside any git repo:
+
+```sh
+claude-start                    # or codex-start / gemini-start / cursor-start
+```
+
+That's it. The agent opens already knowing your standards, this project, and where
+you left off last time.
+
+## A session, start to finish
+
+```console
+$ cd ~/code/checkout-api
+$ claude-start
+  Use terse output this session? [y/N] n
+
+  # Claude launches pre-loaded with:
+  #   • your profile + coding standards + commit policy   (global)
+  #   • checkout-api: purpose, architecture, decisions    (project)
+  #   • "Next: wire the refund webhook"                   (last session's carryover)
+
+… you build the refund webhook, make a few commits …
+
+$ ai-note "refund webhook live; still need idempotency keys"   # jot mid-session
+
+# On exit, a hook stamps the session log with the branch, the commits you made,
+# and anything uncommitted. Tomorrow's claude-start picks up exactly there.
+```
+
+No copy-pasting context. No re-explaining the stack. No "where were we."
 
 ## The problem
 
 Every AI coding session starts from zero.
 
 Claude Code, Codex, Gemini CLI. The moment a session ends, the agent forgets what
-was built, the decisions that were made, the PRD, every architectural and
-codebase choice. The context that mattered most evaporates with the chat thread,
-and the next run begins blind.
+was built, the decisions that were made, the PRD, every architectural and codebase
+choice. The context that mattered most evaporates with the chat thread, and the
+next run begins blind.
 
 You pay the same tax on every run:
 
@@ -28,22 +75,20 @@ You pay the same tax on every run:
 Switching agents makes it worse. Each CLI is its own island with its own memory,
 or none. Knowledge earned in Claude doesn't reach Codex.
 
-## The approach
+## How it works
 
 Keep the memory outside the chat, in plain Markdown on disk, and inject it into
-whichever agent you launch. Because it's just files, the vault works as an
+whichever agent you launch. Because it's just files, the vault doubles as an
 [Obsidian](https://obsidian.md) folder with graph view, backlinks, and search;
 nothing here requires Obsidian.
 
-Memory is organized in three layers, each injected at the right scope:
+Memory sits in three layers, each injected at the right scope:
 
 | Layer | Lives in | Injected | Holds |
 |---|---|---|---|
 | **Global** | `_Global_Profile.md`, `_Standards.md` | every session, every project | who you are, your rules, coding standards, commit policy |
 | **Project** | `_projects/<repo>.md` | sessions in that repo | purpose, architecture, constraints, active decisions |
 | **Session** | `_session_logs/<repo>/<timestamp>.md` | next session as carryover | what changed, blockers, next steps |
-
-## How it works
 
 ```
   $ claude-start
@@ -68,51 +113,52 @@ Memory is organized in three layers, each injected at the right scope:
 One environment variable, `AI_MEM_ROOT`, points at the vault, so the system moves
 between machines by pointing at the same folder.
 
----
+## Install
 
-## Install (zsh)
+Pick whichever fits how you manage your shell. All three end at the same place.
+
+**Clone and run** (source of truth, zero dependencies):
 
 ```sh
 git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
-~/ai-memory/install.sh                 # scaffolds the vault, prints the next step
+~/ai-memory/install.sh
 ```
 
-Add the two printed lines to `~/.zshrc`:
-
-```zsh
-export AI_MEM_ROOT="$HOME/.ai-memory/_Ai_Memory"   # or point at an Obsidian vault
-source "$HOME/ai-memory/shell/ai-mem.zsh"
-```
-
-Reload, then run from inside any git repo:
+**npm** (if you'd rather not clone by hand):
 
 ```sh
-exec zsh
-claude-start        # or codex-start / gemini-start / cursor-start
+npm create ai-memory@latest      # or: npx create-ai-memory
 ```
 
-The first launch scaffolds the project note and a session log for you.
+The npm package is a thin bootstrapper: it clones the repo and runs the same
+`install.sh`, so the two paths never drift. Node 16+ is used only to bootstrap;
+the tool itself is node-free.
+
+**zsh plugin manager:**
+
+```zsh
+# zinit
+zinit light rambaarde/ai-memory
+
+# antidote (in your plugins file)
+rambaarde/ai-memory
+
+# oh-my-zsh: clone into custom/plugins, then add ai-memory to plugins=(...)
+```
+
+Plugin-manager installs only source the module. That's fine: the vault
+auto-scaffolds from the shipped templates on first use, so `install.sh` is
+optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you don't want the default
+`~/.ai-memory/_Ai_Memory`.
 
 > **zsh only.** The module uses `print -r`, `${(s:|:)}`, and `select`. A bash
 > port is welcome as a PR; see [Roadmap](#roadmap).
-
-## First run, step by step
-
-1. `cd` into a git repo and run `claude-start`.
-2. ai-mem resolves the project from the repo's directory name.
-3. It creates `_projects/<repo>.md` from the template if it doesn't exist yet.
-4. It creates a fresh session log and finds your latest prior log for carryover.
-5. It asks, y/n, which optional session skills to enable (see below).
-6. The agent launches with the assembled context as its opening prompt, so it
-   reads your standards, the project note, and where you left off before you type.
-7. When the session ends, the Stop hook stamps an auto summary into the log, so
-   tomorrow's run starts where today's ended.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `claude-start` · `codex-start` · `gemini-start` · `cursor-start` | Launch an agent with full vault context and the session-mode picker |
+| `claude-start` · `codex-start` · `gemini-start` · `cursor-start` | Launch an agent with full vault context and the session-skill picker |
 | `ai-start [project]` | Prepare the session (project note and fresh log) without launching an agent |
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
@@ -121,14 +167,13 @@ Project is auto-resolved from the current git repo; pass a name to override.
 
 ## Session skills (optional)
 
-You define your own per-session skills; ai-mem ships none. At launch, ai-mem asks
+You define your own per-session skills; ai-memory ships none. At launch it asks
 y/n for each skill you registered, then injects the chosen instruction blocks into
-the agent (and for Cursor, writes them as a managed always-apply rule). Nothing
-registered means a plain session with no extra prompt.
+the agent (and for Cursor, writes them as a managed always-apply rule). Register
+nothing and every session is plain.
 
-Register skills in `~/.zshrc` before sourcing the module. Each entry is
-`key` mapped to `prompt::instruction block`, and `AI_MEM_SKILL_ORDER` sets the
-ask order:
+Add skills in `~/.zshrc` before sourcing the module. Each entry maps a `key` to
+`prompt::instruction block`, and `AI_MEM_SKILL_ORDER` sets the ask order:
 
 ```zsh
 typeset -gA AI_MEM_SKILLS
@@ -140,7 +185,7 @@ source "$HOME/ai-memory/shell/ai-mem.zsh"
 ```
 
 The injected block applies for the whole run, so a session's chosen skills persist
-as instructions across every mutation the agent makes.
+as instructions across every change the agent makes.
 
 ## Vault layout
 
@@ -157,14 +202,14 @@ $AI_MEM_ROOT/
       <repo>-<timestamp>.md    one file per session
 ```
 
-Notes are created from templates on first use and never overwritten by the
-installer. Edit `_Global_Profile.md` and `_Standards.md` to make them yours; the
-shipped versions are sanitized placeholders.
+Notes are created from templates on first use and never overwritten. Edit
+`_Global_Profile.md` and `_Standards.md` to make them yours; the shipped versions
+are sanitized placeholders.
 
 ## Adding a new agent
 
-The launchers aren't hardcoded. Each agent is one small adapter, and the
-`<name>-start` function is generated for you. To add `opencode`, or aider, etc.:
+Launchers aren't hardcoded. Each agent is one small adapter, and the
+`<name>-start` function is generated for you. To add `opencode`, aider, etc.:
 
 1. Define the adapter in `shell/adapters.zsh`. It receives `$1` memory prompt,
    `$2` mode block, and `$3` onward extra args:
@@ -183,15 +228,15 @@ The launchers aren't hardcoded. Each agent is one small adapter, and the
 ## Optional integrations
 
 ### Claude Code hooks
-The files live in `hooks/claude/`. Record repo `HEAD` at session start, then on exit write an auto block to the log
-with the branch, commits made this session, and uncommitted changes, so the next
-session has real carryover instead of an empty template. Merge
-`settings.snippet.json` into `~/.claude/settings.json`, replacing `<AI_MEM_HOME>`
-with an absolute path. Both hooks no-op for plain `claude` runs; they gate on
-`$AI_MEM_ACTIVE_SESSION_LOG`.
+The files live in `hooks/claude/`. Record repo `HEAD` at session start, then on
+exit write an auto block to the log with the branch, commits made this session, and
+uncommitted changes, so the next session has real carryover instead of an empty
+template. Merge `settings.snippet.json` into `~/.claude/settings.json`, replacing
+`<AI_MEM_HOME>` with an absolute path. Both hooks no-op for plain `claude` runs;
+they gate on `$AI_MEM_ACTIVE_SESSION_LOG`.
 
-### Git commit guard — `hooks/git/`
-Guardrails that enforce the workflow:
+### Git commit guard
+The files live in `hooks/git/`:
 
 - **`commit-msg`** requires Conventional Commits and a structured body, and that
   `ai-context` was loaded in the committing shell, matching a per-repo token. An
@@ -211,9 +256,23 @@ git -C <repo> config core.hooksPath .githooks
 |---|---|---|
 | `AI_MEM_ROOT` | `$HOME/.ai-memory/_Ai_Memory` | Vault root. Point at any folder, including an existing Obsidian vault |
 | `AI_MEM_AGENTS` | `claude codex gemini cursor` | Space-separated agents to generate `-start` functions for |
+| `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
+
+## Tests
+
+Pure zsh, no framework, no network. It spins up a throwaway vault and git repo and
+asserts path guarding, project resolution, session prep, the context prompt, the
+skill picker, launcher generation, adapter dispatch, the commit token, and
+`ai-note`.
+
+```sh
+zsh tests/run.sh
+```
 
 ## Design notes
 
+- **The vault is the source of truth; the chat is disposable.** Durable state lives
+  in Markdown, not in any agent's memory.
 - **Path-guarded writes.** Every file operation is checked to stay inside
   `$AI_MEM_ROOT`, so an agent can't write outside the memory boundary.
 - **Project = git repo.** Resolution prefers the repo you're standing in, so
