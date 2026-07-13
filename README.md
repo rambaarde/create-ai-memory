@@ -24,7 +24,7 @@ npm create ai-memory@latest
 
 <br>
 
-<img src="assets/demo.gif" alt="Installing create-ai-memory with npm create ai-memory@latest" width="820">
+<img src="https://raw.githubusercontent.com/rambaarde/create-ai-memory/main/assets/demo.gif" alt="Installing create-ai-memory with npm create ai-memory@latest" width="820">
 
 </div>
 
