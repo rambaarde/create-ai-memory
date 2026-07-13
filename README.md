@@ -8,8 +8,10 @@ Give Claude Code, Codex, Gemini, Cursor, and opencode a shared second brain that
 survives across sessions: durable profile, per-project context, and last-session carryover,
 injected at launch. The vault is the source of truth; the chat is disposable.
 
+No daemon, no database, no API key. Just zsh and Markdown files you can read.
+
 ![zsh](https://img.shields.io/badge/shell-zsh-89e051)
-![tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-35%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![PRs](https://img.shields.io/badge/PRs-welcome-orange)
 
@@ -99,8 +101,7 @@ No copy-pasting context. No re-explaining the stack. No "where were we."
 ## Quickstart
 
 ```sh
-git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
-~/ai-memory/install.sh          # banner + a couple of prompts, then you're set
+npm create ai-memory@latest     # copies the tool in and runs the setup, no git clone
 exec zsh
 ```
 
@@ -160,11 +161,11 @@ off last time.
 
 Pick whichever fits how you manage your shell. All paths end at the same place.
 
-**Clone and run** (source of truth, zero dependencies):
+**npm** (no git clone; the tool is bundled in the package):
 
 ```sh
-git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
-~/ai-memory/install.sh
+npm create ai-memory@latest         # into ~/ai-memory, then runs the setup
+npx create-ai-memory ~/code/ai-memory   # or a directory you choose
 ```
 
 **zsh plugin manager:**
@@ -184,15 +185,12 @@ auto-scaffolds from the shipped templates on first use, so `install.sh` is
 optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you don't want the default
 `~/.ai-memory/_Ai_Memory`.
 
-**npm** (bootstrapper; not published yet):
+**Clone and run** (the source of truth all paths reuse):
 
 ```sh
-npm create ai-memory@latest      # once create-ai-memory is on npm
+git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
+~/ai-memory/install.sh
 ```
-
-The `npm/` package is a thin bootstrapper that clones the repo and runs the same
-`install.sh`, so the paths never drift. It is not on npm yet; until it's published
-(`cd npm && npm publish --access public`), use clone-and-run or a plugin manager.
 
 > **zsh only.** The module uses `print -r`, `${(s:|:)}`, and `select`. A bash
 > port is welcome as a PR; see [Roadmap](#roadmap).

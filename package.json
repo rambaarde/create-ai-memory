@@ -1,0 +1,44 @@
+{
+  "name": "create-ai-memory",
+  "version": "0.1.0",
+  "description": "Persistent, agent-agnostic session memory for AI coding CLIs (Claude Code, Codex, Gemini, Cursor, opencode). One Markdown vault, any agent.",
+  "bin": {
+    "create-ai-memory": "bin/create-ai-memory.js"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "shell/",
+    "hooks/",
+    "vault-template/",
+    "install.sh",
+    "ai-memory.plugin.zsh",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ai",
+    "memory",
+    "claude",
+    "codex",
+    "gemini",
+    "cursor",
+    "opencode",
+    "cli",
+    "agent",
+    "obsidian",
+    "zsh"
+  ],
+  "homepage": "https://github.com/rambaarde/ai-memory#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rambaarde/ai-memory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rambaarde/ai-memory/issues"
+  },
+  "license": "MIT",
+  "author": "Ram Christopher Baarde"
+}
