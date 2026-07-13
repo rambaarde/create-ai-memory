@@ -1,6 +1,6 @@
 <div align="center">
 
-# ai-memory
+# create-ai-memory
 
 **The persistent memory layer for AI coding agents. One Markdown vault, every CLI.**
 
