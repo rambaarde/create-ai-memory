@@ -22,7 +22,7 @@ const pkgRoot = resolve(__dirname, '..');                       // bundled tool
 const dest = resolve(process.argv[2] || join(homedir(), 'ai-memory'));
 
 // Files that make up the tool; copied verbatim from the package into dest.
-const ITEMS = ['shell', 'hooks', 'vault-template', 'install.sh', 'ai-memory.plugin.zsh', 'LICENSE'];
+const ITEMS = ['shell', 'hooks', 'vault-template', 'install.sh', 'create-ai-memory.plugin.zsh', 'LICENSE'];
 
 console.log(`create-ai-memory: installing into ${dest}`);
 mkdirSync(dest, { recursive: true });

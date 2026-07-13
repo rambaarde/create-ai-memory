@@ -15,7 +15,7 @@
     "hooks/",
     "vault-template/",
     "install.sh",
-    "ai-memory.plugin.zsh",
+    "create-ai-memory.plugin.zsh",
     "LICENSE"
   ],
   "keywords": [
@@ -31,13 +31,13 @@
     "obsidian",
     "zsh"
   ],
-  "homepage": "https://github.com/rambaarde/ai-memory#readme",
+  "homepage": "https://github.com/rambaarde/create-ai-memory#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rambaarde/ai-memory.git"
+    "url": "git+https://github.com/rambaarde/create-ai-memory.git"
   },
   "bugs": {
-    "url": "https://github.com/rambaarde/ai-memory/issues"
+    "url": "https://github.com/rambaarde/create-ai-memory/issues"
   },
   "license": "MIT",
   "author": "Ram Christopher Baarde"

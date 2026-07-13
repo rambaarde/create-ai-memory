@@ -172,12 +172,12 @@ npx create-ai-memory ~/code/ai-memory   # or a directory you choose
 
 ```zsh
 # zinit
-zinit light rambaarde/ai-memory
+zinit light rambaarde/create-ai-memory
 
 # antidote (in your plugins file)
-rambaarde/ai-memory
+rambaarde/create-ai-memory
 
-# oh-my-zsh: clone into custom/plugins, then add ai-memory to plugins=(...)
+# oh-my-zsh: clone into custom/plugins, then add create-ai-memory to plugins=(...)
 ```
 
 Plugin-manager installs only source the module. That's fine: the vault
@@ -188,7 +188,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you don't want the default
 **Clone and run** (the source of truth all paths reuse):
 
 ```sh
-git clone https://github.com/rambaarde/ai-memory.git ~/ai-memory
+git clone https://github.com/rambaarde/create-ai-memory.git ~/ai-memory
 ~/ai-memory/install.sh
 ```
 

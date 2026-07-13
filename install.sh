@@ -102,7 +102,7 @@ echo
 if [ -f "$RC" ] && grep -qF "$SOURCE_LINE" "$RC"; then
   echo "  ~/.zshrc already sources ai-memory; leaving it untouched."
 elif confirm "Append the setup lines to ~/.zshrc now?"; then
-  { printf '\n# ai-memory (https://github.com/rambaarde/ai-memory)\n'; printf '%s\n' "$LINES"; } >> "$RC"
+  { printf '\n# ai-memory (https://github.com/rambaarde/create-ai-memory)\n'; printf '%s\n' "$LINES"; } >> "$RC"
   echo "  added to $RC"
   echo
   echo "  Reload your shell:  exec zsh"
