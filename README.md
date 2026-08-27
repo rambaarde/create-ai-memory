@@ -224,13 +224,6 @@ auto-scaffolds from the shipped templates on first use, so `install.sh` is
 optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 `~/.ai-memory/_Ai_Memory`.
 
-**Clone and run** (the source of truth all paths reuse):
-
-```sh
-git clone https://github.com/rambaarde/create-ai-memory.git ~/ai-memory
-~/ai-memory/install.sh
-```
-
 > **zsh only.** The module uses `print -r`, `${(s:|:)}`, and associative arrays. A bash
 > port is welcome as a PR; see [Roadmap](#roadmap).
 
@@ -456,6 +449,14 @@ lines.
 - Optional cross-project index and search over session logs.
 
 ## Contributing
+
+Clone the repo and run `install.sh` from the checkout — that's the source of
+truth every other install path (npm, plugin managers) reuses:
+
+```sh
+git clone https://github.com/rambaarde/create-ai-memory.git ~/ai-memory
+~/ai-memory/install.sh
+```
 
 Issues and PRs are welcome. Good first areas: a bash port, new agent adapters, and
 docs. Run `zsh tests/run.sh` before opening a PR; keep changes additive and the

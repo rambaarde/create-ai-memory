@@ -142,10 +142,17 @@ jobs:
             echo "waiting for the registry to serve $VERSION ($i)"; sleep 10
           done
           WORK="$(mktemp -d)"
+          cd "$WORK"
+          npm init -y >/dev/null
+          npm install "create-ai-memory@$VERSION" --prefer-online
           # install.sh is non-interactive when piped (see its own header
           # comment): closed stdin takes every default and never blocks, so
           # this runs the real installer end to end, not a stand-in for it.
-          npx --yes "create-ai-memory@$VERSION" "$WORK/tool" < /dev/null
+          # Invoke the installed bin directly rather than through npx — npx's
+          # temp-install-and-PATH-shim step has proven flaky on the hosted
+          # runner even though the identical package installs and runs fine
+          # both locally and in a plain Docker container.
+          node ./node_modules/create-ai-memory/bin/create-ai-memory.js "$WORK/tool" < /dev/null
           test -f "$WORK/tool/shell/ai-mem.zsh"
           test -f "$WORK/tool/install.sh"
           zsh -c "source \"$WORK/tool/shell/ai-mem.zsh\" && typeset -f claude-start >/dev/null" \
