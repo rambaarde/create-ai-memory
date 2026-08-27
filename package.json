@@ -5,6 +5,10 @@
   "bin": {
     "create-ai-memory": "bin/create-ai-memory.js"
   },
+  "scripts": {
+    "test": "zsh tests/run.sh",
+    "prepublishOnly": "npm test"
+  },
   "type": "commonjs",
   "engines": {
     "node": ">=18"

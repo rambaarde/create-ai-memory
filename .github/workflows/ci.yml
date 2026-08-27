@@ -1,0 +1,56 @@
+# workflow_dispatch is here because release-please opens its Release PR using
+# GITHUB_TOKEN, and GitHub deliberately does not start workflows from that
+# token. Without a way to run this on demand, a Release PR can arrive with no
+# checks at all and never satisfy a required one.
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    # develop is here because work lands there first. Without it a PR into
+    # develop gets zero checks, and the branch that is supposed to catch
+    # things before main becomes the one place nothing is verified.
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  test:
+    # zsh-only tool by design (shell/ai-mem.zsh says so up front) — Windows
+    # isn't a realistic target, so the matrix stays to the two shells that
+    # actually ship zsh.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ["18", "20", "22"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: ensure zsh is present
+        run: command -v zsh >/dev/null || (sudo apt-get update -y && sudo apt-get install -y --no-install-recommends zsh)
+        if: runner.os == 'Linux'
+      - run: npm test
+
+  no-dependencies:
+    # The install story is defended mechanically rather than by intention.
+    # Anything appearing in these fields is a change worth arguing about
+    # first, so it fails here instead of shipping quietly.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          node -e '
+            const pkg = require("./package.json");
+            for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+              const found = Object.keys(pkg[field] ?? {});
+              if (found.length) {
+                console.error(`${field} appeared: ${found.join(", ")}`);
+                process.exit(1);
+              }
+            }
+            console.log("ok: zero dependencies, required or otherwise");
+          '
