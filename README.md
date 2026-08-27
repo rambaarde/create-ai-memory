@@ -17,7 +17,7 @@ npm create ai-memory@latest
 
 [![npm](https://img.shields.io/npm/v/create-ai-memory?color=cb3837&label=npm)](https://www.npmjs.com/package/create-ai-memory)
 ![zsh](https://img.shields.io/badge/shell-zsh-89e051)
-![tests](https://img.shields.io/badge/tests-38%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-44%20passing-brightgreen)
 ![deps](https://img.shields.io/badge/runtime%20deps-0-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![PRs](https://img.shields.io/badge/PRs-welcome-orange)
@@ -75,7 +75,7 @@ hands it to the agent as its opening message:
         ├─ create a fresh session log from the template
         ├─ gather:  Global Profile + Standards         (who you are)
         │           Project note                        (this repo)
-        │           latest prior session log            (where you left off)
+        │           prior session's outcome             (where you left off, inlined)
         ├─ ask which session skills to enable           (optional)
         └─ launch the agent with all of it as the first prompt
               │
@@ -87,6 +87,11 @@ hands it to the agent as its opening message:
         (branch, commits made, uncommitted changes)
         → the NEXT session inherits it as carryover
 ```
+
+The prior session's outcome is extracted from the log and inlined into the opening
+prompt directly — not just a path the agent is told to go read. No separate file,
+no index, nothing new in the vault: it's read straight out of the session log you
+already have, every launch.
 
 One environment variable, `AI_MEM_ROOT`, points at the vault, so the whole system
 moves between machines by pointing at the same folder.
