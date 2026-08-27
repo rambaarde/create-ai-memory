@@ -182,14 +182,62 @@ _ai_mem_prepare_session() {
     print -r -- "$project_name|$project_note|$previous_session_note|$session_note"
 }
 
+# Pull one "* **Label:** value" bullet out of a session log's fixed
+# "# Session Outcome" section. Reads the log directly — no separate file is
+# ever written, so there is nothing extra sitting in the vault.
+_ai_mem_session_field() {
+    local file="$1" label="$2" value
+    [[ -f "$file" ]] || return 0
+    value="$(grep -m1 -E "^\* \*\*${label}:\*\*" "$file" | sed -E "s|^\* \*\*${label}:\*\*[[:space:]]*||")"
+    # An untouched template still has its literal [bracket] placeholder — that
+    # is not real content, so treat it the same as an empty field.
+    [[ "$value" == \[*\] ]] && return 0
+    print -r -- "$value"
+}
+
+# Defensive cap so one unusually long freeform bullet can't blow up the
+# prompt. Never triggers for the template's intended single-line bullets.
+_ai_mem_cap_field() {
+    local text="$1" cap="${2:-500}" source_ref="$3"
+    if (( ${#text} > cap )); then
+        print -r -- "${text[1,$cap]}… (truncated, ${#text} chars total — see $source_ref)"
+    else
+        print -r -- "$text"
+    fi
+}
+
 _ai_mem_context_prompt() {
     local project_note="${1:-}"
     local previous_session_note="${2:-}"
     local session_note="${3:-}"
     local previous_session_label="(none yet)"
+    local previous_session_block="- Latest prior session log: (none yet)"
 
     if [[ -n "$previous_session_note" ]]; then
         previous_session_label="$previous_session_note"
+
+        local summary decisions blockers next
+        summary="$(_ai_mem_session_field "$previous_session_note" 'High-Level Summary')"
+        decisions="$(_ai_mem_session_field "$previous_session_note" 'Important Decisions')"
+        blockers="$(_ai_mem_session_field "$previous_session_note" 'Constraints / Blockers')"
+        next="$(_ai_mem_session_field "$previous_session_note" 'Next Step')"
+
+        if [[ -z "${AI_MEM_NO_DIGEST:-}" && ( -n "$summary" || -n "$decisions" || -n "$blockers" || -n "$next" ) ]]; then
+            [[ -n "$summary" ]] || summary="—"
+            [[ -n "$decisions" ]] || decisions="—"
+            [[ -n "$blockers" ]] || blockers="—"
+            [[ -n "$next" ]] || next="—"
+
+            previous_session_block="- Latest prior session ($previous_session_note), summarized below:"
+            previous_session_block+=$'\n'"* **Summary:** $(_ai_mem_cap_field "$summary" 500 "$previous_session_note")"
+            previous_session_block+=$'\n'"* **Decisions:** $(_ai_mem_cap_field "$decisions" 500 "$previous_session_note")"
+            previous_session_block+=$'\n'"* **Blockers:** $(_ai_mem_cap_field "$blockers" 500 "$previous_session_note")"
+            previous_session_block+=$'\n'"* **Next:** $(_ai_mem_cap_field "$next" 500 "$previous_session_note")"
+        else
+            previous_session_block="- Latest prior session log: $previous_session_label"
+            previous_session_block+=$'\n'
+            previous_session_block+="Read the latest prior session log for continuity before acting. Do not load the full session history unless the user asks for it."
+        fi
     fi
 
     cat <<EOF
@@ -201,12 +249,11 @@ $(_ai_mem_note_contents "$AI_MEM_GLOBAL")
 $(_ai_mem_note_contents "$AI_MEM_STANDARDS")
 
 - Project context: $project_note
-- Latest prior session log: $previous_session_label
+$previous_session_block
 - Active session log: $session_note
 
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
-Read the latest prior session log for continuity before acting. Do not load the full session history unless the user asks for it.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 EOF
 }

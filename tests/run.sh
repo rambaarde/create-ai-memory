@@ -82,6 +82,41 @@ has "$ctx" "_projects/demoproj.md"                         "context prompt refer
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "$AI_MEM_ROOT"        "active session log is exported under the vault"
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "demoproj"            "active session log belongs to this project"
 
+# --- 4b. prior session's Session Outcome bullets inline directly, no extra file
+PREVLOG="$AI_MEM_SESSION_DIR/demoproj/demoproj-2026-08-20_10-00-00.md"
+cat > "$PREVLOG" <<'EOF'
+---
+date: 2026-08-20
+---
+
+# Session Outcome
+* **High-Level Summary:** built the thing
+* **Important Decisions:** used option B
+* **Constraints / Blockers:** none
+* **Next Step:** ship it
+EOF
+
+inline_ctx="$(_ai_mem_context_prompt "$project_note" "$PREVLOG" "$session_note")"
+has   "$inline_ctx" "used option B"                                    "prior session bullets are extracted and inlined directly from the log"
+hasnt "$inline_ctx" "Read the latest prior session log for continuity" "no read-instruction fallback text when bullets are found"
+
+nodigest_ctx="$(AI_MEM_NO_DIGEST=1 _ai_mem_context_prompt "$project_note" "$PREVLOG" "$session_note")"
+hasnt "$nodigest_ctx" "used option B"                                    "AI_MEM_NO_DIGEST skips inlining even when bullets exist"
+has   "$nodigest_ctx" "Read the latest prior session log for continuity" "AI_MEM_NO_DIGEST falls back to the read instruction"
+
+# An untouched template (still has [bracket] placeholders) must not be inlined
+# as if it were real content.
+UNFILLEDLOG="$AI_MEM_SESSION_DIR/demoproj/demoproj-2026-08-21_10-00-00.md"
+cat > "$UNFILLEDLOG" <<'EOF'
+# Session Outcome
+* **High-Level Summary:** [What changed or was decided]
+* **Important Decisions:** [Durable decisions only]
+* **Constraints / Blockers:** [What is still limiting progress]
+* **Next Step:** [Most important follow-up]
+EOF
+unfilled_ctx="$(_ai_mem_context_prompt "$project_note" "$UNFILLEDLOG" "$session_note")"
+has   "$unfilled_ctx" "Read the latest prior session log for continuity" "an untouched template's bracket placeholders fall back to the read instruction"
+hasnt "$unfilled_ctx" "What changed or was decided"                     "bracket placeholder text is never inlined as if it were real content"
 # --- 5. commit-ready token is written and matches the shell -------------------
 token_file="$AI_MEM_ROOT/_session_logs/.context-ready/demoproj.token"
 exists "$token_file"                                       "ai-context writes the commit-ready token file"
