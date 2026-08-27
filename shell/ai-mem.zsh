@@ -187,9 +187,21 @@ _ai_mem_context_prompt() {
     local previous_session_note="${2:-}"
     local session_note="${3:-}"
     local previous_session_label="(none yet)"
+    local previous_session_block="- Latest prior session log: (none yet)"
 
     if [[ -n "$previous_session_note" ]]; then
         previous_session_label="$previous_session_note"
+        local digest_file="${previous_session_note:h}/.digest.md"
+
+        if [[ -z "${AI_MEM_NO_DIGEST:-}" && -f "$digest_file" ]]; then
+            previous_session_block="- Latest prior session ($previous_session_note), summarized below:"
+            previous_session_block+=$'\n'
+            previous_session_block+="$(_ai_mem_note_contents "$digest_file")"
+        else
+            previous_session_block="- Latest prior session log: $previous_session_label"
+            previous_session_block+=$'\n'
+            previous_session_block+="Read the latest prior session log for continuity before acting. Do not load the full session history unless the user asks for it."
+        fi
     fi
 
     cat <<EOF
@@ -201,12 +213,11 @@ $(_ai_mem_note_contents "$AI_MEM_GLOBAL")
 $(_ai_mem_note_contents "$AI_MEM_STANDARDS")
 
 - Project context: $project_note
-- Latest prior session log: $previous_session_label
+$previous_session_block
 - Active session log: $session_note
 
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
-Read the latest prior session log for continuity before acting. Do not load the full session history unless the user asks for it.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 EOF
 }

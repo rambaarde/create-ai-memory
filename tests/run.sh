@@ -82,6 +82,35 @@ has "$ctx" "_projects/demoproj.md"                         "context prompt refer
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "$AI_MEM_ROOT"        "active session log is exported under the vault"
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "demoproj"            "active session log belongs to this project"
 
+# --- 4b. session digest inlines instead of a bare path pointer ----------------
+digest_dir="$AI_MEM_SESSION_DIR/demoproj"
+cat > "$digest_dir/.digest.md" <<'EOF'
+<!-- auto-generated -->
+**Last session:** 2026-08-20 · 1 commits · branch main
+
+* **Summary:** built the digest
+* **Decisions:** used option B
+* **Blockers:** none
+* **Next:** ship it
+EOF
+
+DIGESTFILE="$(mktemp)"
+ai-context > "$DIGESTFILE"
+digest_ctx="$(<"$DIGESTFILE")"
+has   "$digest_ctx" "used option B"                                    "digest content is inlined when .digest.md exists"
+hasnt "$digest_ctx" "Read the latest prior session log for continuity" "no read-instruction fallback text when digest is inlined"
+
+NODIGESTFILE="$(mktemp)"
+AI_MEM_NO_DIGEST=1 ai-context > "$NODIGESTFILE"
+nodigest_ctx="$(<"$NODIGESTFILE")"
+hasnt "$nodigest_ctx" "used option B"                                    "AI_MEM_NO_DIGEST skips the inlined digest"
+has   "$nodigest_ctx" "Read the latest prior session log for continuity" "AI_MEM_NO_DIGEST falls back to the read instruction"
+
+rm "$digest_dir/.digest.md"
+NOFILEFILE="$(mktemp)"
+ai-context > "$NOFILEFILE"
+nofile_ctx="$(<"$NOFILEFILE")"
+has "$nofile_ctx" "Read the latest prior session log for continuity" "missing .digest.md falls back to the read instruction"
 # --- 5. commit-ready token is written and matches the shell -------------------
 token_file="$AI_MEM_ROOT/_session_logs/.context-ready/demoproj.token"
 exists "$token_file"                                       "ai-context writes the commit-ready token file"
@@ -137,6 +166,33 @@ _ai_adapter_cursor "mem" "" </dev/null
                     || nok "cursor adapter clears the rule when no skills are chosen"
 unfunction open cursor 2>/dev/null
 export HOME="$_OLDHOME"
+
+# --- 12. session-summary.sh Stop hook regenerates the digest -------------------
+HOOK_WORK="$(mktemp -d)/hookproj"
+mkdir -p "$HOOK_WORK"
+git -C "$HOOK_WORK" init -q
+git -C "$HOOK_WORK" config user.email test@example.com
+git -C "$HOOK_WORK" config user.name  tester
+HOOK_LOG="$HOOK_WORK/hooklog.md"
+cat > "$HOOK_LOG" <<'EOF'
+---
+date: 2026-08-27
+---
+
+# Session Outcome
+* **High-Level Summary:** wired the digest hook
+* **Important Decisions:** template extraction, no LLM call
+* **Constraints / Blockers:** none
+* **Next Step:** open the PR
+EOF
+HOOK_DIGEST="$HOOK_WORK/.digest.md"
+( cd "$HOOK_WORK" && AI_MEM_ACTIVE_SESSION_LOG="$HOOK_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh" )
+exists "$HOOK_DIGEST"                                       "session-summary.sh writes .digest.md"
+has "$(<"$HOOK_DIGEST")" "template extraction, no LLM call" "digest carries the extracted Decisions bullet"
+has "$(<"$HOOK_DIGEST")" "wired the digest hook"            "digest carries the extracted Summary bullet"
+first_digest="$(<"$HOOK_DIGEST")"
+( cd "$HOOK_WORK" && AI_MEM_ACTIVE_SESSION_LOG="$HOOK_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh" )
+is "$(<"$HOOK_DIGEST")" "$first_digest"                     "digest regenerates idempotently across repeated Stop events"
 
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
