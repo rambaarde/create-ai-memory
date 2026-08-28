@@ -172,7 +172,12 @@ _ai_mem_prepare_session() {
             "$AI_MEM_PROJECT_DIR/_project_template.md" > "$project_note"
     fi
 
-    SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g' \
+    local prev_link=""
+    if [[ -n "$previous_session_note" ]]; then
+        prev_link="[[${previous_session_note:t:r}]]"
+    fi
+
+    SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" PREV_LINK="$prev_link" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g; s/\{\{previous_session_link\}\}/$ENV{PREV_LINK}/g' \
         "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"
 
     export AI_MEM_ACTIVE_PROJECT="$project_name"

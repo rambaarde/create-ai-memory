@@ -70,6 +70,18 @@ exists "$session_note"                            "prepare_session creates a ses
 is "$prev_log" ""                                 "no prior log on the first session"
 has "$(<"$project_note")" "demoproj"              "project note has the name substituted in from the template"
 
+# --- 3b. session log frontmatter links to the project note and prior session --
+# A separate project name so this never perturbs demoproj's own session chain,
+# which later sections rely on being exactly what section 3 created.
+LT1="$(_ai_mem_prepare_session linktest)"
+LT1_NOTE="${LT1##*|}"
+has "$(<"$LT1_NOTE")" 'project: "[[linktest]]"' "session frontmatter links to the project note"
+has "$(<"$LT1_NOTE")" 'previous: ""'            "first session has no previous link"
+
+LT2="$(_ai_mem_prepare_session linktest)"
+LT2_NOTE="${LT2##*|}"
+LT1_BASENAME="${LT1_NOTE:t:r}"
+has "$(<"$LT2_NOTE")" "previous: \"[[${LT1_BASENAME}]]\"" "second session links back to the first"
 # --- 4. context prompt embeds the whole memory stack --------------------------
 # Redirect (not $()) so ai-context runs in THIS shell and its exports survive.
 CTXFILE="$(mktemp)"
