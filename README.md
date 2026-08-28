@@ -97,6 +97,44 @@ already have, every launch.
 One environment variable, `AI_MEM_ROOT`, points at the vault, so the whole system
 moves between machines by pointing at the same folder.
 
+## The full loop
+
+Agents read the vault through `ai-mem.zsh` at launch and write to it through a Stop
+hook at close. You read the same files in Obsidian, or through `ai-mem-search` and
+`ai-mem-lint`. Neither side gets a privileged interface — it's the same folder either way.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant Shell as claude-start
+    participant Agent as Claude Code
+    participant Vault as _Ai_Memory
+    participant Backup as git backup (optional)
+
+    You->>Shell: claude-start
+    Shell->>Vault: read _Global_Profile.md + _Standards.md
+    Vault-->>Shell: full text
+    Shell->>Vault: read prior session's Session Outcome
+    Vault-->>Shell: Summary / Decisions / Blockers / Next
+    Shell->>Vault: create session log (project + previous wikilinks)
+    Shell->>Agent: launch, all of it as the first message
+    Note over You,Agent: the session's work happens here
+    You->>Agent: ai-note "..." (optional, mid-session)
+    Agent->>Vault: append to Live Notes
+    Note over Agent: session ends -- Stop hook fires
+    Agent->>Vault: rewrite Auto Session Log (branch, commits, changes)
+    Agent->>Backup: commit + push, if the vault is git-backed
+    Note over Vault: nothing overwritten -- a fresh file every session
+    You->>Shell: claude-start (next time)
+    Shell->>Vault: read prior session again
+    Note over Shell,Vault: now includes what just happened
+```
+
+Everything through step 10 touches only files on your machine. Step 11 is the
+only network call in the whole loop, and only exists if you set up a git-backed
+vault yourself; skip that and everything stays local, always.
+
 ## See a full session
 
 ```console
