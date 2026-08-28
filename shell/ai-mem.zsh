@@ -591,4 +591,38 @@ ai-mem-lint() {
         print -r -- "$issues issue(s) found"
     fi
     return $(( issues > 0 ? 1 : 0 ))
+    return $(( issues > 0 ? 1 : 0 ))
+}
+
+# Full-text search across the vault. Plain grep -- no new dependency, and at
+# vault scale (a personal notes collection, not a codebase) there is no real
+# performance reason to reach for anything faster.
+ai-mem-search() {
+    local term="${1:-}"
+    local project="${2:-}"
+    if [[ -z "$term" ]]; then
+        echo "Usage: ai-mem-search <term> [project]"
+        return 1
+    fi
+
+    local search_root="$AI_MEM_ROOT"
+    if [[ -n "$project" ]]; then
+        search_root="$(_ai_mem_project_session_dir "$project")"
+        if [[ ! -d "$search_root" ]]; then
+            print -r -- "ai-mem-search: no session logs for project '$project'"
+            return 1
+        fi
+    fi
+
+    local raw
+    raw="$(grep -rn --exclude-dir=.git --exclude='_session_template.md' --exclude='_project_template.md' -- "$term" "$search_root" 2>/dev/null)"
+
+    if [[ -z "$raw" ]]; then
+        print -r -- "no matches for '$term' in $search_root"
+        return 1
+    fi
+
+    print -r -- "$raw"
+    print -r -- "--"
+    print -r -- "$(print -r -- "$raw" | wc -l | tr -d ' ') match(es) for '$term'"
 }
