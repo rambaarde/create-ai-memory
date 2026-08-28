@@ -137,6 +137,18 @@ for a in claude codex gemini cursor opencode faketest; do
 done
 fails 'typeset -f bogus-start' "no launcher for an unregistered agent"
 
+# A same-named alias from another plugin (e.g. ai-prompt-search wraps
+# claude-start/codex-start as aliases) used to make zsh refuse to `eval` the
+# launcher function at all: "defining function based on alias", parse error
+# near '()'. Re-source in a throwaway shell with that alias predefined.
+ALIAS_CONFLICT_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" zsh -c '
+  alias claude-start="echo should-not-run"
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  typeset -f claude-start >/dev/null && echo is-function || echo not-a-function
+' 2>&1)"
+has   "$ALIAS_CONFLICT_OUT" "is-function"   "a pre-existing same-named alias does not break launcher generation"
+hasnt "$ALIAS_CONFLICT_OUT" "parse error"    "no parse error when a launcher name collides with an existing alias"
+
 # --- 8. adapter dispatch: unknown agent errors, known agent gets the prompt ---
 fails '_ai_session_start bogus </dev/null' "dispatch fails for an agent with no adapter"
 faketest-start </dev/null >/dev/null 2>&1
