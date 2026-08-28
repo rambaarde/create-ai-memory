@@ -293,10 +293,22 @@ succeeds 'ai-mem-search "the answer" searchproj1'         "ai-mem-search scoped 
 fails 'ai-mem-search'                                     "ai-mem-search fails without a search term"
 fails 'ai-mem-search "x" no-such-project'                 "ai-mem-search fails cleanly for an unknown project"
 
+# Recency ordering: three dated hits, newest must come first, oldest last,
+# and the output must contain nothing but the expected lines (regression
+# guard for a real zsh bug hit while building this -- `local` re-declared on
+# each loop iteration inside a piped while-loop leaked a stray "ts=<value>"
+# line into stdout).
+echo "needle here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-01-01_00-00-00.md"
+echo "needle here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-06-15_12-30-00.md"
+echo "needle here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-03-10_08-00-00.md"
+RECENCY_OUT="$(ai-mem-search needle)"
+has "$(print -r -- "$RECENCY_OUT" | sed -n '1p')" "2026-06-15_12-30-00" "ai-mem-search sorts the newest match first"
+has "$(print -r -- "$RECENCY_OUT" | sed -n '3p')" "2026-01-01_00-00-00" "ai-mem-search sorts the oldest match last"
+hasnt "$RECENCY_OUT" "ts=" "ai-mem-search never leaks its internal sort-key variable into the output"
+
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 
-# --- summary ------------------------------------------------------------------
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"

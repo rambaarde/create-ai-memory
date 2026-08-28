@@ -591,7 +591,6 @@ ai-mem-lint() {
         print -r -- "$issues issue(s) found"
     fi
     return $(( issues > 0 ? 1 : 0 ))
-    return $(( issues > 0 ? 1 : 0 ))
 }
 
 # Full-text search across the vault. Plain grep -- no new dependency, and at
@@ -622,7 +621,17 @@ ai-mem-search() {
         return 1
     fi
 
-    print -r -- "$raw"
+    # Newest-first: for a time-series log the most recent match is usually the
+    # relevant one, so a large result set stays usable at a glance even without
+    # ranking. Sort key is the YYYY-MM-DD_HH-MM-SS embedded in the filename;
+    # lines with no such timestamp (e.g. _Global_Profile.md) sort last.
+    local sorted ts
+    sorted="$(print -r -- "$raw" | while IFS= read -r line; do
+        ts="$(print -r -- "$line" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}' | head -1)"
+        print -r -- "${ts:-0000-00-00_00-00-00}|${line}"
+    done | sort -r | cut -d'|' -f2-)"
+
+    print -r -- "$sorted"
     print -r -- "--"
     print -r -- "$(print -r -- "$raw" | wc -l | tr -d ' ') match(es) for '$term'"
 }
