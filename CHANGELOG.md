@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/rambaarde/create-ai-memory/compare/v0.2.0...v0.2.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **ai-mem:** clear a conflicting alias before defining launcher functions ([d6c135f](https://github.com/rambaarde/create-ai-memory/commit/d6c135f69abbdb86d004ae84cd6acc6bcb95d399))
+* **ci:** verify the published package via direct install, not npx ([aeafb1a](https://github.com/rambaarde/create-ai-memory/commit/aeafb1a5187bc944d41ae640dfbcc2ab977ce129))
+
 ## [0.2.0](https://github.com/rambaarde/create-ai-memory/compare/v0.1.2...v0.2.0) (2026-08-27)
 
 
