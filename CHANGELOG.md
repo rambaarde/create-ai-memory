@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/rambaarde/create-ai-memory/compare/v0.3.0...v0.4.0) (2026-08-28)
+
+
+### Features
+
+* **ai-mem:** add ai-mem-lint to catch broken vault links ([eb3d975](https://github.com/rambaarde/create-ai-memory/commit/eb3d9755d202099dd980780ec251c5c234eb3c83))
+
 ## [0.3.0](https://github.com/rambaarde/create-ai-memory/compare/v0.2.1...v0.3.0) (2026-08-28)
 
 
