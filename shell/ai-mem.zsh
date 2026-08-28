@@ -459,6 +459,11 @@ source "$AI_MEM_HOME/adapters.zsh"
 : "${AI_MEM_AGENTS:=claude codex gemini cursor opencode}"
 for _ai_agent in ${(z)AI_MEM_AGENTS}; do
     if typeset -f "_ai_adapter_$_ai_agent" >/dev/null; then
+        # A same-named alias (e.g. from another plugin) makes zsh refuse to
+        # `eval` a function definition of that name at all -- "defining
+        # function based on alias", parse error near '()'. Clear it first;
+        # the function this defines is what should win.
+        unalias "${_ai_agent}-start" 2>/dev/null
         eval "${_ai_agent}-start() { _ai_session_start ${_ai_agent} \"\$@\"; }"
     fi
 done
