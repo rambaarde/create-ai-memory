@@ -16,8 +16,9 @@ npm create ai-memory@latest
 ```
 
 [![npm](https://img.shields.io/npm/v/create-ai-memory?color=cb3837&label=npm)](https://www.npmjs.com/package/create-ai-memory)
+[![ci](https://img.shields.io/github/actions/workflow/status/rambaarde/create-ai-memory/ci.yml?label=ci)](https://github.com/rambaarde/create-ai-memory/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/actions/workflow/status/rambaarde/create-ai-memory/publish.yml?label=release)](https://github.com/rambaarde/create-ai-memory/actions/workflows/publish.yml)
 ![zsh](https://img.shields.io/badge/shell-zsh-89e051)
-![tests](https://img.shields.io/badge/tests-44%20passing-brightgreen)
 ![deps](https://img.shields.io/badge/runtime%20deps-0-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![PRs](https://img.shields.io/badge/PRs-welcome-orange)
