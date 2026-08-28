@@ -236,6 +236,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-start [project]` | Prepare the session (project note and fresh log) without launching an agent |
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
+| `ai-mem-lint` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes |
 
 Project is auto-resolved from the current git repo; pass a name to override.
 

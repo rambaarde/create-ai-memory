@@ -545,4 +545,50 @@ ai-note() {
 
     printf '\n- %s %s\n' "$timestamp" "$note_text" >> "$session_note"
     printf 'Appended to %s\n' "$session_note"
+    printf 'Appended to %s\n' "$session_note"
+}
+
+# Lints the vault's links: session logs missing a project wikilink, previous
+# links pointing at a note that no longer exists, and project notes nothing
+# links back to. Pure grep/find -- no new dependency, catches exactly the
+# "isolated dots in Graph View" class of problem before you have to notice it
+# by eye.
+ai-mem-lint() {
+    local issues=0 f label target found
+
+    while IFS= read -r -d '' f; do
+        [[ "${f:t}" == "_session_template.md" ]] && continue
+
+        if ! grep -qm1 -E '^project:.*\[\[.*\]\]' "$f" 2>/dev/null; then
+            print -r -- "orphaned session log (no project link): $f"
+            (( issues++ ))
+        fi
+
+        label="$(grep -m1 '^previous:' "$f" 2>/dev/null)"
+        if [[ "$label" == *'[['* ]]; then
+            target="${label#*\[\[}"
+            target="${target%%\]\]*}"
+            found="$(find "${f:h}" -maxdepth 1 -name "${target}.md" -print -quit 2>/dev/null)"
+            if [[ -z "$found" ]]; then
+                print -r -- "dangling previous link: $f -> [[${target}]] (not found)"
+                (( issues++ ))
+            fi
+        fi
+    done < <(find "$AI_MEM_SESSION_DIR" -maxdepth 2 -name "*.md" -print0 2>/dev/null)
+
+    while IFS= read -r -d '' f; do
+        [[ "${f:t}" == "_project_template.md" ]] && continue
+        local pname="${f:t:r}"
+        if ! grep -rq -- "\[\[${pname}\]\]" "$AI_MEM_SESSION_DIR" 2>/dev/null; then
+            print -r -- "unreferenced project note (no session log links to it): $f"
+            (( issues++ ))
+        fi
+    done < <(find "$AI_MEM_PROJECT_DIR" -maxdepth 1 -name "*.md" -print0 2>/dev/null)
+
+    if (( issues == 0 )); then
+        print -r -- "ok: vault links are clean"
+    else
+        print -r -- "$issues issue(s) found"
+    fi
+    return $(( issues > 0 ? 1 : 0 ))
 }
