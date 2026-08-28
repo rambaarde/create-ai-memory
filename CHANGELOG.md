@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/rambaarde/create-ai-memory/compare/v0.2.1...v0.3.0) (2026-08-28)
+
+
+### Features
+
+* **ai-mem:** link session logs to their project note and prior session ([6ad4192](https://github.com/rambaarde/create-ai-memory/commit/6ad41920ef3237cb8dce7dc852c7b332e22da1c2))
+* **hooks:** auto commit and push a git-backed vault on session close ([a3aef28](https://github.com/rambaarde/create-ai-memory/commit/a3aef28644cc39fa45f1aba733461ce386c24d40))
+
 ## [0.2.1](https://github.com/rambaarde/create-ai-memory/compare/v0.2.0...v0.2.1) (2026-08-28)
 
 
