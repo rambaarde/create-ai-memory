@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/rambaarde/create-ai-memory/compare/v0.5.0...v0.6.0) (2026-08-28)
+
+
+### Features
+
+* **ai-mem:** sort ai-mem-search results newest-first ([15394c1](https://github.com/rambaarde/create-ai-memory/commit/15394c11dc20957a4135a34429aadc920f68a879))
+
 ## [0.5.0](https://github.com/rambaarde/create-ai-memory/compare/v0.4.0...v0.5.0) (2026-08-28)
 
 
