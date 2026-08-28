@@ -70,6 +70,33 @@ exists "$session_note"                            "prepare_session creates a ses
 is "$prev_log" ""                                 "no prior log on the first session"
 has "$(<"$project_note")" "demoproj"              "project note has the name substituted in from the template"
 
+# --- 3b. session log frontmatter links to the project note and prior session --
+# A separate project name so this never perturbs demoproj's own session chain,
+# which later sections rely on being exactly what section 3 created.
+LT1="$(_ai_mem_prepare_session linktest)"
+LT1_NOTE="${LT1##*|}"
+has "$(<"$LT1_NOTE")" 'project: "[[linktest]]"' "session frontmatter links to the project note"
+has "$(<"$LT1_NOTE")" 'previous: ""'            "first session has no previous link"
+
+LT2="$(_ai_mem_prepare_session linktest)"
+LT2_NOTE="${LT2##*|}"
+LT1_BASENAME="${LT1_NOTE:t:r}"
+has "$(<"$LT2_NOTE")" "previous: \"[[${LT1_BASENAME}]]\"" "second session links back to the first"
+
+# Persistence beyond 2 sessions: a third session must chain to the second,
+# not fall back to the first or drop the link entirely.
+sleep 1.1  # filenames are second-granularity; guarantee a distinct timestamp
+LT3="$(_ai_mem_prepare_session linktest)"
+LT3_NOTE="${LT3##*|}"
+LT2_BASENAME="${LT2_NOTE:t:r}"
+has "$(<"$LT3_NOTE")" "previous: \"[[${LT2_BASENAME}]]\"" "third session links back to the second, not the first"
+
+# A brand-new, different project gets the same treatment automatically, and
+# its chain starts fresh -- it must not pick up linktest's history.
+OTHERPROJ="$(_ai_mem_prepare_session othernewproj)"
+OTHERPROJ_NOTE="${OTHERPROJ##*|}"
+has "$(<"$OTHERPROJ_NOTE")" 'project: "[[othernewproj]]"' "a brand-new project also gets a correct project wikilink"
+has "$(<"$OTHERPROJ_NOTE")" 'previous: ""'                 "a brand-new project's first session is isolated from another project's chain"
 # --- 4. context prompt embeds the whole memory stack --------------------------
 # Redirect (not $()) so ai-context runs in THIS shell and its exports survive.
 CTXFILE="$(mktemp)"
@@ -185,6 +212,27 @@ _ai_adapter_cursor "mem" "" </dev/null
 unfunction open cursor 2>/dev/null
 export HOME="$_OLDHOME"
 
+# --- 12. session-summary.sh optionally backs up a git-backed vault -----------
+GITVAULT="$(mktemp -d)"
+git -C "$GITVAULT" init -q
+git -C "$GITVAULT" config user.email t@t.com
+git -C "$GITVAULT" config user.name t
+mkdir -p "$GITVAULT/proj"
+GITVAULT_LOG="$GITVAULT/proj/hooklog.md"
+print -r -- $'---\ndate: 2026-08-28\n---\n\n# Session Outcome' > "$GITVAULT_LOG"
+git -C "$GITVAULT" add -A && git -C "$GITVAULT" commit -q -m "initial vault state"
+
+AI_MEM_ROOT="$GITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$GITVAULT_LOG" \
+  bash "$REPO_ROOT/hooks/claude/session-summary.sh"
+is "$(git -C "$GITVAULT" status --short)" ""                     "vault backup hook leaves the git-backed vault clean after committing"
+has "$(git -C "$GITVAULT" log --oneline -1)" "vault backup"       "vault backup hook creates a commit"
+
+NOGITVAULT="$(mktemp -d)/not_a_git_repo"
+mkdir -p "$NOGITVAULT/proj"
+NOGITVAULT_LOG="$NOGITVAULT/proj/hooklog.md"
+print -r -- $'---\ndate: 2026-08-28\n---' > "$NOGITVAULT_LOG"
+succeeds 'AI_MEM_ROOT="$NOGITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$NOGITVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"' \
+  "vault backup hook no-ops cleanly when the vault isn't git-backed"
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"

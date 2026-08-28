@@ -52,3 +52,18 @@ tmp="$(mktemp)"
 awk -v m="$marker" 'index($0, m)==1 { exit } { print }' "$log" > "$tmp"
 printf '%s\n\n%s\n' "$(cat "$tmp")" "$block" > "$log"
 rm -f "$tmp"
+
+# Optional vault backup: if AI_MEM_ROOT (or an ancestor directory) is its own
+# git repo, commit and push whatever changed this session. Entirely separate
+# from the project repo git calls above -- this targets the vault, not the
+# code being worked on. No-ops silently if the vault isn't git-backed; this
+# is best-effort and must never fail the hook or block the session on a push
+# error (no network, no remote configured, etc).
+vault_git_root="$(git -C "${AI_MEM_ROOT:-}" rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$vault_git_root" ]; then
+    git -C "$vault_git_root" add -A 2>/dev/null || true
+    if ! git -C "$vault_git_root" diff --cached --quiet 2>/dev/null; then
+        git -C "$vault_git_root" commit -q -m "vault backup: ${stamp}" 2>/dev/null || true
+        git -C "$vault_git_root" push -q 2>/dev/null || true
+    fi
+fi

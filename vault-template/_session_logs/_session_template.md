@@ -1,6 +1,7 @@
 ---
 date: {{date}}
-project: {{project_name}}
+project: "[[{{project_name}}]]"
+previous: "{{previous_session_link}}"
 repo_root: [Insert Repo Root]
 ---
 
