@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/rambaarde/create-ai-memory/compare/v0.4.0...v0.5.0) (2026-08-28)
+
+
+### Features
+
+* **ai-mem:** add ai-mem-search for full-text search across the vault ([4ae4622](https://github.com/rambaarde/create-ai-memory/commit/4ae46228e6a156486902cf0a9b4e0764f2932bb7))
+
 ## [0.4.0](https://github.com/rambaarde/create-ai-memory/compare/v0.3.0...v0.4.0) (2026-08-28)
 
 
