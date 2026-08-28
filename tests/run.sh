@@ -233,6 +233,46 @@ NOGITVAULT_LOG="$NOGITVAULT/proj/hooklog.md"
 print -r -- $'---\ndate: 2026-08-28\n---' > "$NOGITVAULT_LOG"
 succeeds 'AI_MEM_ROOT="$NOGITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$NOGITVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"' \
   "vault backup hook no-ops cleanly when the vault isn't git-backed"
+# --- 13. ai-mem-lint catches broken/orphaned links -----------------------------
+LINTVAULT="$(mktemp -d)"
+mkdir -p "$LINTVAULT/_session_logs/lintproj" "$LINTVAULT/_projects"
+cat > "$LINTVAULT/_session_logs/lintproj/lintproj-2026-08-28_10-00-00.md" <<'EOF'
+---
+date: 2026-08-28
+project: "[[lintproj]]"
+previous: ""
+---
+EOF
+: > "$LINTVAULT/_projects/lintproj.md"
+
+_OLD_SESSION_DIR="$AI_MEM_SESSION_DIR"
+_OLD_PROJECT_DIR="$AI_MEM_PROJECT_DIR"
+AI_MEM_SESSION_DIR="$LINTVAULT/_session_logs"
+AI_MEM_PROJECT_DIR="$LINTVAULT/_projects"
+
+LINTOUT="$(ai-mem-lint)"; LINTEXIT=$?
+is  "$LINTEXIT" "0"                        "ai-mem-lint reports clean on a well-linked vault"
+has "$LINTOUT" "ok: vault links are clean" "ai-mem-lint's clean message"
+
+# Break it three ways: no project link, dangling previous, orphaned project note.
+cat > "$LINTVAULT/_session_logs/lintproj/lintproj-2026-08-28_11-00-00.md" <<'EOF'
+---
+date: 2026-08-28
+project: plain-text
+previous: "[[does-not-exist]]"
+---
+EOF
+: > "$LINTVAULT/_projects/orphanproj.md"
+
+LINTOUT2="$(ai-mem-lint)"; LINTEXIT2=$?
+is  "$LINTEXIT2" "1"                    "ai-mem-lint exits non-zero when issues exist"
+has "$LINTOUT2" "orphaned session log"  "ai-mem-lint catches a missing project link"
+has "$LINTOUT2" "dangling previous link" "ai-mem-lint catches a dangling previous link"
+has "$LINTOUT2" "unreferenced project note" "ai-mem-lint catches an unreferenced project note"
+
+AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR"
+AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
+
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"
