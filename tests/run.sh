@@ -197,6 +197,27 @@ _ai_adapter_cursor "mem" "" </dev/null
 unfunction open cursor 2>/dev/null
 export HOME="$_OLDHOME"
 
+# --- 12. session-summary.sh optionally backs up a git-backed vault -----------
+GITVAULT="$(mktemp -d)"
+git -C "$GITVAULT" init -q
+git -C "$GITVAULT" config user.email t@t.com
+git -C "$GITVAULT" config user.name t
+mkdir -p "$GITVAULT/proj"
+GITVAULT_LOG="$GITVAULT/proj/hooklog.md"
+print -r -- $'---\ndate: 2026-08-28\n---\n\n# Session Outcome' > "$GITVAULT_LOG"
+git -C "$GITVAULT" add -A && git -C "$GITVAULT" commit -q -m "initial vault state"
+
+AI_MEM_ROOT="$GITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$GITVAULT_LOG" \
+  bash "$REPO_ROOT/hooks/claude/session-summary.sh"
+is "$(git -C "$GITVAULT" status --short)" ""                     "vault backup hook leaves the git-backed vault clean after committing"
+has "$(git -C "$GITVAULT" log --oneline -1)" "vault backup"       "vault backup hook creates a commit"
+
+NOGITVAULT="$(mktemp -d)/not_a_git_repo"
+mkdir -p "$NOGITVAULT/proj"
+NOGITVAULT_LOG="$NOGITVAULT/proj/hooklog.md"
+print -r -- $'---\ndate: 2026-08-28\n---' > "$NOGITVAULT_LOG"
+succeeds 'AI_MEM_ROOT="$NOGITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$NOGITVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"' \
+  "vault backup hook no-ops cleanly when the vault isn't git-backed"
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"
