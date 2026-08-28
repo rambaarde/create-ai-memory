@@ -273,6 +273,30 @@ has "$LINTOUT2" "unreferenced project note" "ai-mem-lint catches an unreferenced
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
 
+# --- 14. ai-mem-search finds text across the vault -----------------------------
+SEARCHVAULT="$(mktemp -d)"
+mkdir -p "$SEARCHVAULT/_session_logs/searchproj1" "$SEARCHVAULT/_session_logs/searchproj2"
+echo "the answer is 42" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-01-01_00-00-00.md"
+echo "nothing relevant here" > "$SEARCHVAULT/_session_logs/searchproj2/searchproj2-2026-01-01_00-00-00.md"
+
+_OLD_AI_MEM_ROOT="$AI_MEM_ROOT"
+_OLD_SESSION_DIR2="$AI_MEM_SESSION_DIR"
+AI_MEM_ROOT="$SEARCHVAULT"
+AI_MEM_SESSION_DIR="$SEARCHVAULT/_session_logs"
+
+succeeds 'ai-mem-search "the answer"'                    "ai-mem-search finds a term present in the vault"
+has "$(ai-mem-search "the answer")" "searchproj1"        "ai-mem-search reports the matching file"
+fails 'ai-mem-search "nope-not-here"'                     "ai-mem-search exits non-zero when nothing matches"
+has "$(ai-mem-search "nope-not-here")" "no matches"       "ai-mem-search prints an explicit empty state, not silence"
+fails 'ai-mem-search "the answer" searchproj2'            "ai-mem-search scoped to a project without the term finds nothing"
+succeeds 'ai-mem-search "the answer" searchproj1'         "ai-mem-search scoped to the right project finds it"
+fails 'ai-mem-search'                                     "ai-mem-search fails without a search term"
+fails 'ai-mem-search "x" no-such-project'                 "ai-mem-search fails cleanly for an unknown project"
+
+AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
+AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
+
+# --- summary ------------------------------------------------------------------
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"
