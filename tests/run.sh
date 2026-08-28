@@ -82,6 +82,21 @@ LT2="$(_ai_mem_prepare_session linktest)"
 LT2_NOTE="${LT2##*|}"
 LT1_BASENAME="${LT1_NOTE:t:r}"
 has "$(<"$LT2_NOTE")" "previous: \"[[${LT1_BASENAME}]]\"" "second session links back to the first"
+
+# Persistence beyond 2 sessions: a third session must chain to the second,
+# not fall back to the first or drop the link entirely.
+sleep 1.1  # filenames are second-granularity; guarantee a distinct timestamp
+LT3="$(_ai_mem_prepare_session linktest)"
+LT3_NOTE="${LT3##*|}"
+LT2_BASENAME="${LT2_NOTE:t:r}"
+has "$(<"$LT3_NOTE")" "previous: \"[[${LT2_BASENAME}]]\"" "third session links back to the second, not the first"
+
+# A brand-new, different project gets the same treatment automatically, and
+# its chain starts fresh -- it must not pick up linktest's history.
+OTHERPROJ="$(_ai_mem_prepare_session othernewproj)"
+OTHERPROJ_NOTE="${OTHERPROJ##*|}"
+has "$(<"$OTHERPROJ_NOTE")" 'project: "[[othernewproj]]"' "a brand-new project also gets a correct project wikilink"
+has "$(<"$OTHERPROJ_NOTE")" 'previous: ""'                 "a brand-new project's first session is isolated from another project's chain"
 # --- 4. context prompt embeds the whole memory stack --------------------------
 # Redirect (not $()) so ai-context runs in THIS shell and its exports survive.
 CTXFILE="$(mktemp)"
