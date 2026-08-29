@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/rambaarde/create-ai-memory/compare/v0.6.0...v0.7.0) (2026-08-29)
+
+
+### Features
+
+* **ai-mem:** tell the agent about ai-mem-search/lint, lock the backup commit ([e3a7cab](https://github.com/rambaarde/create-ai-memory/commit/e3a7cab2ffd0bb57b240206eb78bcc39a7b03b81))
+
 ## [0.6.0](https://github.com/rambaarde/create-ai-memory/compare/v0.5.0...v0.6.0) (2026-08-28)
 
 
