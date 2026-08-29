@@ -106,6 +106,8 @@ has "$ctx" "Read these notes before doing anything else:" "context prompt has th
 has "$ctx" "type: ai-global-profile"                       "context prompt embeds the global profile"
 has "$ctx" "Shared Standards"                              "context prompt embeds the standards note"
 has "$ctx" "_projects/demoproj.md"                         "context prompt references the project note"
+has "$ctx" "ai-mem-search"                                 "context prompt tells the agent ai-mem-search exists"
+has "$ctx" "ai-mem-lint"                                   "context prompt tells the agent ai-mem-lint exists"
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "$AI_MEM_ROOT"        "active session log is exported under the vault"
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "demoproj"            "active session log belongs to this project"
 
@@ -233,6 +235,31 @@ NOGITVAULT_LOG="$NOGITVAULT/proj/hooklog.md"
 print -r -- $'---\ndate: 2026-08-28\n---' > "$NOGITVAULT_LOG"
 succeeds 'AI_MEM_ROOT="$NOGITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$NOGITVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"' \
   "vault backup hook no-ops cleanly when the vault isn't git-backed"
+
+# A concurrent Stop from a second terminal must skip cleanly, not crash --
+# and a lock abandoned by a crashed run must not wedge every future backup.
+LOCKVAULT="$(mktemp -d)"
+git -C "$LOCKVAULT" init -q
+git -C "$LOCKVAULT" config user.email t@t.com
+git -C "$LOCKVAULT" config user.name t
+mkdir -p "$LOCKVAULT/proj"
+LOCKVAULT_LOG="$LOCKVAULT/proj/hooklog.md"
+echo "# Session Outcome" > "$LOCKVAULT_LOG"
+git -C "$LOCKVAULT" add -A && git -C "$LOCKVAULT" commit -q -m init
+
+mkdir "$LOCKVAULT/.git/aimem-backup.lock"
+echo "more" >> "$LOCKVAULT_LOG"
+succeeds 'AI_MEM_ROOT="$LOCKVAULT" AI_MEM_ACTIVE_SESSION_LOG="$LOCKVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"' \
+  "vault backup hook exits cleanly when another process holds a fresh lock"
+exists "$LOCKVAULT/.git/aimem-backup.lock" "a fresh, contended lock is left untouched, not stolen"
+is "$(git -C "$LOCKVAULT" log --oneline | wc -l | tr -d ' ')" "1" "no backup commit happens while the lock is held by someone else"
+rmdir "$LOCKVAULT/.git/aimem-backup.lock"
+
+mkdir "$LOCKVAULT/.git/aimem-backup.lock"
+touch -t "$(date -v-61S '+%Y%m%d%H%M.%S' 2>/dev/null || date -d '61 seconds ago' '+%Y%m%d%H%M.%S')" "$LOCKVAULT/.git/aimem-backup.lock"
+AI_MEM_ROOT="$LOCKVAULT" AI_MEM_ACTIVE_SESSION_LOG="$LOCKVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"
+is "$(git -C "$LOCKVAULT" log --oneline | wc -l | tr -d ' ')" "2" "a lock older than 60s is reclaimed and the backup proceeds"
+
 # --- 13. ai-mem-lint catches broken/orphaned links -----------------------------
 LINTVAULT="$(mktemp -d)"
 mkdir -p "$LINTVAULT/_session_logs/lintproj" "$LINTVAULT/_projects"

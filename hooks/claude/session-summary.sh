@@ -61,9 +61,30 @@ rm -f "$tmp"
 # error (no network, no remote configured, etc).
 vault_git_root="$(git -C "${AI_MEM_ROOT:-}" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$vault_git_root" ]; then
-    git -C "$vault_git_root" add -A 2>/dev/null || true
-    if ! git -C "$vault_git_root" diff --cached --quiet 2>/dev/null; then
-        git -C "$vault_git_root" commit -q -m "vault backup: ${stamp}" 2>/dev/null || true
-        git -C "$vault_git_root" push -q 2>/dev/null || true
+    # A same-second Stop from a second terminal is real -- flock isn't
+    # portable to every platform this ships on, but `mkdir` is atomic
+    # everywhere. A lock older than 60s is almost certainly abandoned by a
+    # crashed run, not a genuine concurrent one (this operation normally
+    # completes in well under a second), so clear it rather than let one
+    # dead process wedge every future backup forever.
+    lock_dir="$vault_git_root/.git/aimem-backup.lock"
+    if [ -d "$lock_dir" ]; then
+        lock_age=$(( $(date +%s) - $(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null || echo 0) ))
+        if [ "$lock_age" -gt 60 ]; then
+            rmdir "$lock_dir" 2>/dev/null || true
+        fi
     fi
+
+    if mkdir "$lock_dir" 2>/dev/null; then
+        trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+        git -C "$vault_git_root" add -A 2>/dev/null || true
+        if ! git -C "$vault_git_root" diff --cached --quiet 2>/dev/null; then
+            git -C "$vault_git_root" commit -q -m "vault backup: ${stamp}" 2>/dev/null || true
+            git -C "$vault_git_root" push -q 2>/dev/null || true
+        fi
+        rmdir "$lock_dir" 2>/dev/null || true
+        trap - EXIT
+    fi
+    # else: another process holds a fresh lock right now -- skip silently,
+    # the next Stop event (this session or another) will catch up.
 fi
