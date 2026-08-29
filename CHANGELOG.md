@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/rambaarde/create-ai-memory/compare/v0.7.0...v0.7.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **hooks:** stat -f means something different on Linux than macOS ([2667acd](https://github.com/rambaarde/create-ai-memory/commit/2667acdfd3e14ce34b4c043c92e440bb5f288860))
+
 ## [0.7.0](https://github.com/rambaarde/create-ai-memory/compare/v0.6.0...v0.7.0) (2026-08-29)
 
 
