@@ -389,9 +389,17 @@ Launchers are not hardcoded. Each agent is one small adapter, and the
 The files live in `hooks/claude/`. Record repo `HEAD` at session start, then on
 exit write an auto block to the log with the branch, commits made this session, and
 uncommitted changes, so the next session has real carryover instead of an empty
-template. Merge `settings.snippet.json` into `~/.claude/settings.json`, replacing
-`<AI_MEM_HOME>` with an absolute path. Both hooks no-op for plain `claude` runs;
-they gate on `$AI_MEM_ACTIVE_SESSION_LOG`.
+template. A third hook fires right before Claude Code auto-compacts: the first
+attempt each session it blocks compaction once and tells the agent to run
+`ai-note` before its working context gets thrown away, then gets out of the
+way for every later attempt (one-shot, via a marker file next to the log) so
+the session can never get stuck refusing to compact. It only guards
+auto-compact, not a deliberate `/compact`. Merge `settings.snippet.json` into
+`~/.claude/settings.json`, replacing `<AI_MEM_HOME>` with an absolute path.
+All three hooks no-op for plain `claude` runs; they gate on
+`$AI_MEM_ACTIVE_SESSION_LOG`. This is Claude-Code-specific -- other agents
+(Codex, Gemini, etc.) have no equivalent pre-compaction hook, so jotting
+things down with `ai-note`/`codex-note` as you go still matters there.
 
 ### Git commit guard
 The files live in `hooks/git/`:
