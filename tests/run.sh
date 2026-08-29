@@ -260,6 +260,24 @@ touch -t "$(date -v-61S '+%Y%m%d%H%M.%S' 2>/dev/null || date -d '61 seconds ago'
 AI_MEM_ROOT="$LOCKVAULT" AI_MEM_ACTIVE_SESSION_LOG="$LOCKVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"
 is "$(git -C "$LOCKVAULT" log --oneline | wc -l | tr -d ' ')" "2" "a lock older than 60s is reclaimed and the backup proceeds"
 
+# --- 12b. pre-compact.sh nudges once, then gets out of the way ----------------
+PCVAULT="$(mktemp -d)"
+mkdir -p "$PCVAULT/proj"
+PCVAULT_LOG="$PCVAULT/proj/pclog.md"
+echo "# Session Outcome" > "$PCVAULT_LOG"
+
+pc_out="$(AI_MEM_ACTIVE_SESSION_LOG="$PCVAULT_LOG" bash "$REPO_ROOT/hooks/claude/pre-compact.sh" 2>&1)"
+pc_rc=$?
+is "$pc_rc" "2"                          "pre-compact hook blocks the first auto-compact"
+has "$pc_out" "ai-note"                  "pre-compact hook's block message points at ai-note"
+exists "${PCVAULT_LOG%.md}.precompact-nudged" "pre-compact hook leaves a one-shot marker"
+
+succeeds 'AI_MEM_ACTIVE_SESSION_LOG="$PCVAULT_LOG" bash "$REPO_ROOT/hooks/claude/pre-compact.sh"' \
+  "pre-compact hook allows every compact attempt after the first nudge"
+
+succeeds 'env -u AI_MEM_ACTIVE_SESSION_LOG bash "$REPO_ROOT/hooks/claude/pre-compact.sh"' \
+  "pre-compact hook no-ops outside a claude-start session"
+
 # --- 13. ai-mem-lint catches broken/orphaned links -----------------------------
 LINTVAULT="$(mktemp -d)"
 mkdir -p "$LINTVAULT/_session_logs/lintproj" "$LINTVAULT/_projects"
