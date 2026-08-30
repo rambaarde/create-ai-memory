@@ -135,10 +135,11 @@ _ai_mem_latest_session_log() {
 # plugin-manager install (source only, no install.sh) still gets a working vault.
 _ai_mem_ensure_vault() {
     [[ -d "$AI_MEM_TEMPLATE_SRC" ]] || return 0
-    mkdir -p "$AI_MEM_PROJECT_DIR" "$AI_MEM_SESSION_DIR"
+    mkdir -p "$AI_MEM_PROJECT_DIR" "$AI_MEM_SESSION_DIR" "$AI_MEM_ROOT/_lessons"
     local rel
     for rel in _Global_Profile.md _Standards.md \
-               _projects/_project_template.md _session_logs/_session_template.md; do
+               _projects/_project_template.md _session_logs/_session_template.md \
+               _lessons/_lesson_template.md; do
         local src="$AI_MEM_TEMPLATE_SRC/$rel" dst="$AI_MEM_ROOT/$rel"
         if [[ -f "$src" && ! -f "$dst" ]]; then
             _ai_mem_guard "$dst" || return 1
@@ -587,7 +588,12 @@ ai-lesson() {
 
     if [[ ! -f "$lesson_file" ]]; then
         mkdir -p "$AI_MEM_ROOT/_lessons"
-        printf -- '---\ntype: ai-lesson\ntopic: %s\n---\n\n# %s\n' "$slug" "$slug" > "$lesson_file"
+        local lesson_template="$AI_MEM_ROOT/_lessons/_lesson_template.md"
+        if [[ -f "$lesson_template" ]]; then
+            TOPIC="$slug" perl -0pe 's/\{\{topic\}\}/$ENV{TOPIC}/g' "$lesson_template" > "$lesson_file"
+        else
+            printf -- '---\ntype: ai-lesson\ntopic: %s\n---\n\n# %s\n' "$slug" "$slug" > "$lesson_file"
+        fi
     fi
 
     printf -- '\n- %s [%s] %s\n' "$timestamp" "$project_name" "$text" >> "$lesson_file"
@@ -659,7 +665,7 @@ ai-mem-search() {
     fi
 
     local raw
-    raw="$(grep -rn --exclude-dir=.git --exclude='_session_template.md' --exclude='_project_template.md' -- "$term" "$search_root" 2>/dev/null)"
+    raw="$(grep -rn --exclude-dir=.git --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
 
     if [[ -z "$raw" ]]; then
         print -r -- "no matches for '$term' in $search_root"
