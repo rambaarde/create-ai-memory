@@ -690,22 +690,15 @@ ai-mem-lint() {
 
 # Full-text search across the vault. Plain grep -- no new dependency, and at
 # vault scale (a personal notes collection, not a codebase) there is no real
-# performance reason to reach for anything faster.
+# performance reason to reach for anything faster. Always resolves one hop
+# out along any [[wikilinks]] on a matched line (see below) -- not a flag,
+# because a flag only helps if whoever's calling this remembers it exists,
+# and the whole point is not depending on that.
 ai-mem-search() {
-    local hops=0
-    local -a rest
-    local a
-    for a in "$@"; do
-        if [[ "$a" == "--hops" ]]; then
-            hops=1
-        else
-            rest+=("$a")
-        fi
-    done
-    local term="${rest[1]:-}"
-    local project="${rest[2]:-}"
+    local term="${1:-}"
+    local project="${2:-}"
     if [[ -z "$term" ]]; then
-        echo "Usage: ai-mem-search <term> [project] [--hops]"
+        echo "Usage: ai-mem-search <term> [project]"
         return 1
     fi
 
@@ -739,9 +732,6 @@ ai-mem-search() {
     print -r -- "$sorted"
     print -r -- "--"
     print -r -- "$(print -r -- "$raw" | wc -l | tr -d ' ') match(es) for '$term'"
-
-    (( hops )) || return 0
-
     # One hop out: resolve [[wikilinks]] found on matched lines to their
     # target note (currently: project notes only -- the confirmed use case
     # is a _lessons entry linking the project(s) it hit) and show a short
