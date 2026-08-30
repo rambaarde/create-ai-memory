@@ -358,6 +358,9 @@ $AI_MEM_ROOT/
     _session_template.md       scaffold for new session logs
     <repo>/
       <repo>-<timestamp>.md    one file per session
+  _lessons/
+    _lesson_template.md       scaffold for new lesson topics
+    <topic-slug>.md            cross-project decisions/mistakes, filed by ai-lesson
 ```
 
 Notes are created from templates on first use and never overwritten. Edit

@@ -78,7 +78,7 @@ ask AI_MEM_AGENTS "Which agents should get <agent>-start launchers?" "$AI_MEM_AG
 # --- scaffold the vault ------------------------------------------------------
 echo
 echo "  scaffolding vault at: $AI_MEM_ROOT"
-mkdir -p "$AI_MEM_ROOT/_projects" "$AI_MEM_ROOT/_session_logs"
+mkdir -p "$AI_MEM_ROOT/_projects" "$AI_MEM_ROOT/_session_logs" "$AI_MEM_ROOT/_lessons"
 
 copy_if_absent() { # never overwrite the user's real notes on a re-run
   local src="$1" dst="$2"
@@ -88,6 +88,7 @@ copy_if_absent "$HERE/vault-template/_Global_Profile.md"                 "$AI_ME
 copy_if_absent "$HERE/vault-template/_Standards.md"                      "$AI_MEM_ROOT/_Standards.md"
 copy_if_absent "$HERE/vault-template/_projects/_project_template.md"     "$AI_MEM_ROOT/_projects/_project_template.md"
 copy_if_absent "$HERE/vault-template/_session_logs/_session_template.md" "$AI_MEM_ROOT/_session_logs/_session_template.md"
+copy_if_absent "$HERE/vault-template/_lessons/_lesson_template.md"       "$AI_MEM_ROOT/_lessons/_lesson_template.md"
 
 # --- assemble the ~/.zshrc lines ---------------------------------------------
 LINES="export AI_MEM_ROOT=\"$AI_MEM_ROOT\""
