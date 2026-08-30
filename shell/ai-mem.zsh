@@ -692,10 +692,20 @@ ai-mem-lint() {
 # vault scale (a personal notes collection, not a codebase) there is no real
 # performance reason to reach for anything faster.
 ai-mem-search() {
-    local term="${1:-}"
-    local project="${2:-}"
+    local hops=0
+    local -a rest
+    local a
+    for a in "$@"; do
+        if [[ "$a" == "--hops" ]]; then
+            hops=1
+        else
+            rest+=("$a")
+        fi
+    done
+    local term="${rest[1]:-}"
+    local project="${rest[2]:-}"
     if [[ -z "$term" ]]; then
-        echo "Usage: ai-mem-search <term> [project]"
+        echo "Usage: ai-mem-search <term> [project] [--hops]"
         return 1
     fi
 
@@ -729,4 +739,27 @@ ai-mem-search() {
     print -r -- "$sorted"
     print -r -- "--"
     print -r -- "$(print -r -- "$raw" | wc -l | tr -d ' ') match(es) for '$term'"
+
+    (( hops )) || return 0
+
+    # One hop out: resolve [[wikilinks]] found on matched lines to their
+    # target note (currently: project notes only -- the confirmed use case
+    # is a _lessons entry linking the project(s) it hit) and show a short
+    # excerpt, so a match doesn't leave you to manually chase the link
+    # yourself.
+    local links link target excerpt
+    links="$(print -r -- "$raw" | grep -oE '\[\[[^]]+\]\]' | sed -E 's/^\[\[|\]\]$//g' | sort -u)"
+    [[ -n "$links" ]] || return 0
+
+    print -r -- "--"
+    print -r -- "one hop out:"
+    while IFS= read -r link; do
+        [[ -n "$link" ]] || continue
+        target="$AI_MEM_PROJECT_DIR/${link}.md"
+        [[ -f "$target" ]] || continue
+        excerpt="$(grep -m1 -A1 '^\* \*\*Purpose:\*\*' "$target" 2>/dev/null | tail -1)"
+        [[ -n "$excerpt" ]] || excerpt="$(sed -n '/^---$/,/^---$/!p' "$target" | grep -m1 -v '^$')"
+        print -r -- "  [[$link]] -> $target"
+        [[ -n "$excerpt" ]] && print -r -- "    $excerpt"
+    done <<< "$links"
 }
