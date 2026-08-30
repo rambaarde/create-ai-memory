@@ -277,6 +277,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes |
 | `ai-mem-search <term> [project]` | Grep across the vault (or one project's logs) for a term, with `file:line:excerpt` |
+| `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
 Project is auto-resolved from the current git repo; pass a name to override.
 

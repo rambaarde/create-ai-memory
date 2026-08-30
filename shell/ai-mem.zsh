@@ -60,6 +60,25 @@ _ai_mem_vault_backup() {
         rmdir "$lock_dir" 2>/dev/null
     fi
     return 0
+    return 0
+}
+
+# Public entry point for anything that writes to the vault outside
+# ai-note/ai-lesson -- e.g. the update-session-log skill, which edits the
+# Session Outcome section directly and has no other reason to know this
+# function exists.
+ai-mem-vault-backup() {
+    local before after
+    before="$(git -C "${AI_MEM_ROOT:-}" rev-parse HEAD 2>/dev/null || true)"
+    _ai_mem_vault_backup
+    after="$(git -C "${AI_MEM_ROOT:-}" rev-parse HEAD 2>/dev/null || true)"
+    if [[ -z "$before" && -z "$after" ]]; then
+        echo "ai-mem-vault-backup: vault isn't git-backed, nothing to do"
+    elif [[ "$before" != "$after" ]]; then
+        echo "ai-mem-vault-backup: pushed"
+    else
+        echo "ai-mem-vault-backup: nothing to commit"
+    fi
 }
 # Read a vault note only when it exists inside the memory root.
 _ai_mem_note_contents() {
