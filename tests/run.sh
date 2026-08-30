@@ -178,6 +178,29 @@ ALIAS_CONFLICT_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" zsh -c '
 has   "$ALIAS_CONFLICT_OUT" "is-function"   "a pre-existing same-named alias does not break launcher generation"
 hasnt "$ALIAS_CONFLICT_OUT" "parse error"    "no parse error when a launcher name collides with an existing alias"
 
+# --- 7b. stale-shell detection ------------------------------------------------
+# An already-open shell keeps the function definitions it loaded at startup,
+# so editing the module or upgrading the package changes nothing there. The
+# launcher would otherwise run, report success, and silently use months-old
+# behaviour. Copy the module to a temp dir so the test can mutate it without
+# touching the repo.
+STALEDIR="$(mktemp -d)"
+cp "$REPO_ROOT/shell/ai-mem.zsh" "$REPO_ROOT/shell/adapters.zsh" "$STALEDIR/"
+STALE_FRESH_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" zsh -c "
+  source '$STALEDIR/ai-mem.zsh'
+  _ai_session_start bogus </dev/null
+" 2>&1)"
+hasnt "$STALE_FRESH_OUT" "older copy" "no stale warning when the loaded module matches the file on disk"
+
+STALE_CHANGED_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" zsh -c "
+  source '$STALEDIR/ai-mem.zsh'
+  printf '\n# edited after this shell sourced it\n' >> '$STALEDIR/ai-mem.zsh'
+  _ai_session_start bogus </dev/null
+" 2>&1)"
+has "$STALE_CHANGED_OUT" "older copy"      "warns when the module changed after this shell sourced it"
+has "$STALE_CHANGED_OUT" "source ~/.zshrc" "the stale warning names the concrete fix"
+rm -rf "$STALEDIR"
+
 # --- 8. adapter dispatch: unknown agent errors, known agent gets the prompt ---
 fails '_ai_session_start bogus </dev/null' "dispatch fails for an agent with no adapter"
 faketest-start </dev/null >/dev/null 2>&1
