@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.2](https://github.com/rambaarde/create-ai-memory/compare/v0.11.1...v0.11.2) (2026-08-30)
+
+
+### Bug Fixes
+
+* **ai-mem:** make ai-mem-search case-insensitive, literal, and bounded ([a44b0b9](https://github.com/rambaarde/create-ai-memory/commit/a44b0b9101b6af374666c4002cff5c52b8bdd883))
+* **ai-mem:** make ai-mem-search case-insensitive, literal, and bounded ([358bf8c](https://github.com/rambaarde/create-ai-memory/commit/358bf8c6ac82f44ea0617069c64a1dc6794db428))
+
 ## [0.11.1](https://github.com/rambaarde/create-ai-memory/compare/v0.11.0...v0.11.1) (2026-08-30)
 
 
