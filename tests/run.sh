@@ -295,6 +295,22 @@ AI_MEM_ROOT="$NOTEVAULT" zsh -c '
 '
 has "$(git -C "$NOTEVAULT" log --oneline -1)" "vault backup" "ai-note triggers a real vault backup commit, not just the Stop hook"
 
+# --- ai-mem-vault-backup: the public entry point anything else can call
+# (e.g. the update-session-log skill, which edits files directly and never
+# goes through ai-note/ai-lesson).
+echo "more" >> "$NOTEVAULT/_Global_Profile.md"
+BACKUP_OUT="$(AI_MEM_ROOT="$NOTEVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-vault-backup
+')"
+has "$BACKUP_OUT" "pushed" "ai-mem-vault-backup reports pushed when there is something to commit"
+is "$(git -C "$NOTEVAULT" status --short)" "" "ai-mem-vault-backup leaves the vault clean after committing"
+BACKUP_OUT2="$(AI_MEM_ROOT="$NOTEVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-vault-backup
+')"
+has "$BACKUP_OUT2" "nothing to commit" "ai-mem-vault-backup reports nothing to commit on a clean tree"
+
 # A concurrent Stop from a second terminal must skip cleanly, not crash --
 # and a lock abandoned by a crashed run must not wedge every future backup.
 LOCKVAULT="$(mktemp -d)"
