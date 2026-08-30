@@ -206,7 +206,7 @@ succeeds 'ai-lesson rate-limiting "token bucket beat fixed window for bursty tra
   "ai-lesson accepts a topic and text"
 exists "$LESSON_FILE" "ai-lesson creates _lessons/<topic-slug>.md"
 has "$(<"$LESSON_FILE")" "token bucket beat fixed window" "ai-lesson appends the note text"
-has "$(<"$LESSON_FILE")" "[demoproj]" "ai-lesson tags the entry with the current project"
+has "$(<"$LESSON_FILE")" "[[demoproj]]" "ai-lesson tags the entry with a project wikilink, not a plain bracket"
 ai-lesson "Rate Limiting!!" "second entry, same topic" >/dev/null
 is "$(grep -c '^- ' "$LESSON_FILE")" "2" "ai-lesson slugifies the topic so a re-run appends to the same file"
 
