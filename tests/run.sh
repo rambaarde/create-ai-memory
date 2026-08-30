@@ -209,6 +209,14 @@ has "$(<"$LESSON_FILE")" "token bucket beat fixed window" "ai-lesson appends the
 has "$(<"$LESSON_FILE")" "[demoproj]" "ai-lesson tags the entry with the current project"
 ai-lesson "Rate Limiting!!" "second entry, same topic" >/dev/null
 is "$(grep -c '^- ' "$LESSON_FILE")" "2" "ai-lesson slugifies the topic so a re-run appends to the same file"
+
+exists "$AI_MEM_ROOT/_lessons/_lesson_template.md" "install.sh seeds a _lesson_template.md, matching the project/session template pattern"
+LESSON_TEMPLATE_BACKUP="$(<"$AI_MEM_ROOT/_lessons/_lesson_template.md")"
+print -r -- $'---\ntype: ai-lesson\ntopic: {{topic}}\nmarker: CUSTOM-TEMPLATE-MARKER\n---\n\n# {{topic}}' > "$AI_MEM_ROOT/_lessons/_lesson_template.md"
+ai-lesson custom-template-check "proves the template file drives creation, not a hardcoded string" >/dev/null
+has "$(<"$AI_MEM_ROOT/_lessons/custom-template-check.md")" "CUSTOM-TEMPLATE-MARKER" \
+  "ai-lesson expands _lesson_template.md (with {{topic}} substituted) for new files, not a hardcoded format"
+print -r -- "$LESSON_TEMPLATE_BACKUP" > "$AI_MEM_ROOT/_lessons/_lesson_template.md"
 succeeds 'ai-mem-search "token bucket"' "ai-mem-search already covers _lessons/ with no extra wiring"
 
 LESSON_COUNT_BEFORE="$(find "$AI_MEM_ROOT/_lessons" -type f -name '*.md' | wc -l | tr -d ' ')"
