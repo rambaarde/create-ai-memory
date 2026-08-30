@@ -274,6 +274,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-start [project]` | Prepare the session (project note and fresh log) without launching an agent |
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
+| `ai-lesson <topic-slug> <text>` | Append a timestamped note to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes |
 | `ai-mem-search <term> [project]` | Grep across the vault (or one project's logs) for a term, with `file:line:excerpt` |
 

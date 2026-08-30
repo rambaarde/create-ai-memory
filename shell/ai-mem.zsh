@@ -261,6 +261,7 @@ Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH.
+When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <text>\` -- e.g. \`ai-lesson rate-limiting "used a token bucket, fixed window kept losing bursts"\`. It appends to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
 EOF
 }
 
@@ -549,6 +550,49 @@ ai-note() {
     printf 'Appended to %s\n' "$session_note"
 }
 
+codex-lesson() {
+    ai-lesson "$@"
+}
+
+# Cross-project memory: a mistake, decision, or reusable solution, filed under
+# a topic instead of a single project's session log. One flat file per topic
+# (ADR/postmortem shape, not a full wiki) so ai-mem-search already covers it
+# for free -- no new search path, no taxonomy to maintain.
+ai-lesson() {
+    local topic="${1:-}"
+    if [[ -z "$topic" ]]; then
+        echo "Usage: ai-lesson <topic-slug> <text>"
+        return 1
+    fi
+    shift
+    local text="${*:-}"
+    if [[ -z "$text" ]]; then
+        echo "Usage: ai-lesson <topic-slug> <text>"
+        return 1
+    fi
+
+    local slug
+    slug="$(print -r -- "$topic" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+    if [[ -z "$slug" ]]; then
+        echo "ai-lesson: topic slug must contain at least one letter or digit"
+        return 1
+    fi
+
+    local project_name lesson_file timestamp
+    project_name="$(_ai_mem_current_project)" || return 1
+    lesson_file="$AI_MEM_ROOT/_lessons/${slug}.md"
+    timestamp="$(date '+%Y-%m-%d %H:%M')"
+
+    _ai_mem_guard "$lesson_file" || return 1
+
+    if [[ ! -f "$lesson_file" ]]; then
+        mkdir -p "$AI_MEM_ROOT/_lessons"
+        printf -- '---\ntype: ai-lesson\ntopic: %s\n---\n\n# %s\n' "$slug" "$slug" > "$lesson_file"
+    fi
+
+    printf -- '\n- %s [%s] %s\n' "$timestamp" "$project_name" "$text" >> "$lesson_file"
+    printf 'Appended to %s\n' "$lesson_file"
+}
 # Lints the vault's links: session logs missing a project wikilink, previous
 # links pointing at a note that no longer exists, and project notes nothing
 # links back to. Pure grep/find -- no new dependency, catches exactly the
