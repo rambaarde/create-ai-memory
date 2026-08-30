@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1](https://github.com/rambaarde/create-ai-memory/compare/v0.9.0...v0.9.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **ai-mem:** show a real, uncommented example in the lesson template ([64df734](https://github.com/rambaarde/create-ai-memory/commit/64df7345ed7616679e8446c3c394d2bd56d9e855))
+* **ai-mem:** show a real, uncommented example in the lesson template ([6f96719](https://github.com/rambaarde/create-ai-memory/commit/6f967198ce5341c71817ed9dba2487e9b5505267))
+
 ## [0.9.0](https://github.com/rambaarde/create-ai-memory/compare/v0.8.3...v0.9.0) (2026-08-30)
 
 
