@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0](https://github.com/rambaarde/create-ai-memory/compare/v0.11.3...v0.12.0) (2026-08-30)
+
+
+### Features
+
+* **ai-mem:** warn when a shell is running a stale copy of the module ([151c528](https://github.com/rambaarde/create-ai-memory/commit/151c52879789be673cd0b27ab44350dfe6e59320))
+* **ai-mem:** warn when a shell is running a stale copy of the module ([4c4cc36](https://github.com/rambaarde/create-ai-memory/commit/4c4cc36704bfb9d4ae74737400b5911abac16bc8))
+
 ## [0.11.3](https://github.com/rambaarde/create-ai-memory/compare/v0.11.2...v0.11.3) (2026-08-30)
 
 
