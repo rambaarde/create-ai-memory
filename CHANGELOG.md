@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0](https://github.com/rambaarde/create-ai-memory/compare/v0.9.1...v0.10.0) (2026-08-30)
+
+
+### Features
+
+* **ai-mem:** back up the vault on every ai-note/ai-lesson write, not just Stop ([59cbbb1](https://github.com/rambaarde/create-ai-memory/commit/59cbbb1c3209e9de48d768b4c48724e2ed6980ab))
+* **ai-mem:** back up the vault on every ai-note/ai-lesson write, not just Stop ([e1a51d4](https://github.com/rambaarde/create-ai-memory/commit/e1a51d435e2eafa52fff6add42bcba6bada11123))
+* **ai-mem:** expose ai-mem-vault-backup for writes outside ai-note/ai-lesson ([edf957d](https://github.com/rambaarde/create-ai-memory/commit/edf957d27e1f8214b1ae68cc60811da6a2660bde))
+* **ai-mem:** expose ai-mem-vault-backup for writes outside ai-note/ai-lesson ([22c090a](https://github.com/rambaarde/create-ai-memory/commit/22c090a4ec96c8e9a815fda07c2799d64dbb7774))
+
+
+### Bug Fixes
+
+* **hooks:** make the SessionStart hook fail open on a missing log dir ([dd05448](https://github.com/rambaarde/create-ai-memory/commit/dd0544859421835e2dd0bc158c4eba4debd21732))
+* **hooks:** make the SessionStart hook fail open on a missing log dir ([4014e49](https://github.com/rambaarde/create-ai-memory/commit/4014e49113002afdcc74fc2ef346e0bb0a1841a3))
+
 ## [0.9.1](https://github.com/rambaarde/create-ai-memory/compare/v0.9.0...v0.9.1) (2026-08-30)
 
 
