@@ -271,6 +271,30 @@ print -r -- $'---\ndate: 2026-08-28\n---' > "$NOGITVAULT_LOG"
 succeeds 'AI_MEM_ROOT="$NOGITVAULT" AI_MEM_ACTIVE_SESSION_LOG="$NOGITVAULT_LOG" bash "$REPO_ROOT/hooks/claude/session-summary.sh"' \
   "vault backup hook no-ops cleanly when the vault isn't git-backed"
 
+# --- ai-note/ai-lesson trigger a real vault backup too, not just the Stop
+# hook -- Stop can silently never fire, so a note must be durable the moment
+# it's written.
+NOTEVAULT="$(mktemp -d)"
+git -C "$NOTEVAULT" init -q
+git -C "$NOTEVAULT" config user.email t@t.com
+git -C "$NOTEVAULT" config user.name t
+
+NOTEWORK="$(mktemp -d)/repo"
+mkdir -p "$NOTEWORK"
+git -C "$NOTEWORK" init -q
+git -C "$NOTEWORK" config user.email t@t.com
+git -C "$NOTEWORK" config user.name t
+git -C "$NOTEWORK" commit --allow-empty -q -m init
+
+AI_MEM_ROOT="$NOTEVAULT" zsh -c '
+  "'"$REPO_ROOT"'/install.sh" >/dev/null 2>&1
+  git -C "'"$NOTEVAULT"'" add -A && git -C "'"$NOTEVAULT"'" commit -q -m "seed" 2>/dev/null
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$NOTEWORK"'"
+  ai-note "backup smoke test" >/dev/null
+'
+has "$(git -C "$NOTEVAULT" log --oneline -1)" "vault backup" "ai-note triggers a real vault backup commit, not just the Stop hook"
+
 # A concurrent Stop from a second terminal must skip cleanly, not crash --
 # and a lock abandoned by a crashed run must not wedge every future backup.
 LOCKVAULT="$(mktemp -d)"
