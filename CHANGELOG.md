@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/rambaarde/create-ai-memory/compare/v0.8.3...v0.9.0) (2026-08-30)
+
+
+### Features
+
+* **ai-mem:** give ai-lesson entries their own Problem/Solution headers ([2bb44ee](https://github.com/rambaarde/create-ai-memory/commit/2bb44eeb573deed766b1cc033efc6ddcf56453bc))
+* **ai-mem:** give ai-lesson entries their own Problem/Solution headers ([725bca9](https://github.com/rambaarde/create-ai-memory/commit/725bca95b6e29fa36316f70ea0c6cbf1d57c19c6))
+
 ## [0.8.3](https://github.com/rambaarde/create-ai-memory/compare/v0.8.2...v0.8.3) (2026-08-30)
 
 
