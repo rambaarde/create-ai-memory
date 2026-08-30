@@ -584,7 +584,8 @@ ai-lesson() {
         mkdir -p "$AI_MEM_ROOT/_lessons"
         local lesson_template="$AI_MEM_ROOT/_lessons/_lesson_template.md"
         if [[ -f "$lesson_template" ]]; then
-            TOPIC="$slug" perl -0pe 's/\{\{topic\}\}/$ENV{TOPIC}/g' "$lesson_template" > "$lesson_file"
+            TOPIC="$slug" perl -0pe 's/\{\{topic\}\}/$ENV{TOPIC}/g' "$lesson_template" \
+                | awk '/^# /{print; exit} {print}' > "$lesson_file"
         else
             printf -- '---\ntype: ai-lesson\ntopic: %s\n---\n\n# %s\n' "$slug" "$slug" > "$lesson_file"
         fi
