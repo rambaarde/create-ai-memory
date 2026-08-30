@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/rambaarde/create-ai-memory/compare/v0.8.0...v0.8.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **ai-mem:** drive ai-lesson from a template, not a hardcoded string ([c92d38e](https://github.com/rambaarde/create-ai-memory/commit/c92d38e18c70a0d9b226dfb48b70a7b06b951c4b))
+* **ai-mem:** drive ai-lesson from a template, not a hardcoded string ([6d690e5](https://github.com/rambaarde/create-ai-memory/commit/6d690e526bb426aaab9cf1b489d9d9bdbec196d0))
+
 ## [0.8.0](https://github.com/rambaarde/create-ai-memory/compare/v0.7.1...v0.8.0) (2026-08-30)
 
 
