@@ -5,15 +5,10 @@ topic: "{{topic}}"
 
 # {{topic}}
 
-<!--
-  ai-lesson generates each entry below as it's logged -- this file starts
-  and stays otherwise blank. Shape of a generated entry:
+## [Date] [Project]
 
-  ## YYYY-MM-DD HH:MM [[project]]
+### Problem
+[What went wrong]
 
-  ### Problem
-  <what went wrong>
-
-  ### Solution
-  <what fixed it>
--->
+### Solution
+[What fixed it]
