@@ -198,6 +198,29 @@ today_log="$(_ai_mem_today_session_log demoproj)"
 has "$(<"$today_log")" "### Live Notes"           "ai-note creates the Live Notes section"
 has "$(<"$today_log")" "wired the payment webhook" "ai-note appends the note text"
 
+# --- 9b. ai-lesson files a cross-project note under _lessons/ -----------------
+LESSON_FILE="$AI_MEM_ROOT/_lessons/rate-limiting.md"
+fails 'ai-lesson' "ai-lesson fails without a topic"
+fails 'ai-lesson rate-limiting' "ai-lesson fails without note text"
+succeeds 'ai-lesson rate-limiting "token bucket beat fixed window for bursty traffic"' \
+  "ai-lesson accepts a topic and text"
+exists "$LESSON_FILE" "ai-lesson creates _lessons/<topic-slug>.md"
+has "$(<"$LESSON_FILE")" "token bucket beat fixed window" "ai-lesson appends the note text"
+has "$(<"$LESSON_FILE")" "[demoproj]" "ai-lesson tags the entry with the current project"
+ai-lesson "Rate Limiting!!" "second entry, same topic" >/dev/null
+is "$(grep -c '^- ' "$LESSON_FILE")" "2" "ai-lesson slugifies the topic so a re-run appends to the same file"
+succeeds 'ai-mem-search "token bucket"' "ai-mem-search already covers _lessons/ with no extra wiring"
+
+LESSON_COUNT_BEFORE="$(find "$AI_MEM_ROOT/_lessons" -type f -name '*.md' | wc -l | tr -d ' ')"
+fails 'ai-lesson "!!!" "text"' "ai-lesson rejects a topic that slugifies to nothing"
+is "$(find "$AI_MEM_ROOT/_lessons" -type f -name '*.md' | wc -l | tr -d ' ')" "$LESSON_COUNT_BEFORE" \
+  "a rejected topic creates no stray file"
+
+ai-lesson "../../etc/evil" "should not escape the vault" >/dev/null
+is "$(find "$AI_MEM_ROOT" -name 'evil.md' -o -name '*passwd*' 2>/dev/null)" "" \
+  "ai-lesson cannot path-traverse out of _lessons/ via a crafted topic"
+exists "$AI_MEM_ROOT/_lessons/etc-evil.md" "a crafted topic is slugified flat, not treated as a path"
+
 # --- 10. cursor adapter: writes/clears its managed rule file (no GUI) ---------
 # cursor has no headless prompt path; the adapter persists the session's skills
 # as an always-apply rule instead. Verify that offline with the GUI launch stubbed.
