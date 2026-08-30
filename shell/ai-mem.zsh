@@ -33,6 +33,34 @@ _ai_mem_guard() {
     esac
 }
 
+# Best-effort git commit+push for the vault itself (not the project repo being
+# worked on) -- shared by ai-note/ai-lesson (so a note is durable the moment
+# it's written, not just at session Stop, which can silently never fire) and
+# the Stop hook's own copy (hooks/claude/session-summary.sh runs standalone,
+# outside this sourced shell, so it can't call this function directly).
+# No-ops silently if AI_MEM_ROOT isn't its own git repo; never fails the
+# caller on a push error (no network, no remote configured, etc).
+_ai_mem_vault_backup() {
+    local vault_git_root
+    vault_git_root="$(git -C "${AI_MEM_ROOT:-}" rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -n "$vault_git_root" ]] || return 0
+
+    local lock_dir="$vault_git_root/.git/aimem-backup.lock"
+    if [[ -d "$lock_dir" ]]; then
+        local lock_age=$(( $(date +%s) - $(stat -c %Y "$lock_dir" 2>/dev/null || stat -f %m "$lock_dir" 2>/dev/null || echo 0) ))
+        (( lock_age > 60 )) && rmdir "$lock_dir" 2>/dev/null
+    fi
+
+    if mkdir "$lock_dir" 2>/dev/null; then
+        git -C "$vault_git_root" add -A 2>/dev/null
+        if ! git -C "$vault_git_root" diff --cached --quiet 2>/dev/null; then
+            git -C "$vault_git_root" commit -q -m "vault backup: $(date '+%Y-%m-%d %H:%M:%S')" 2>/dev/null
+            git -C "$vault_git_root" push -q 2>/dev/null
+        fi
+        rmdir "$lock_dir" 2>/dev/null
+    fi
+    return 0
+}
 # Read a vault note only when it exists inside the memory root.
 _ai_mem_note_contents() {
     local path="${1:-}"
@@ -547,7 +575,7 @@ ai-note() {
     fi
 
     printf '\n- %s %s\n' "$timestamp" "$note_text" >> "$session_note"
-    printf 'Appended to %s\n' "$session_note"
+    _ai_mem_vault_backup
     printf 'Appended to %s\n' "$session_note"
 }
 
@@ -593,6 +621,7 @@ ai-lesson() {
 
     printf -- '\n## %s [[%s]]\n\n### Problem\n%s\n\n### Solution\n%s\n' \
         "$timestamp" "$project_name" "$problem" "$solution" >> "$lesson_file"
+    _ai_mem_vault_backup
     printf 'Appended to %s\n' "$lesson_file"
 }
 # Lints the vault's links: session logs missing a project wikilink, previous
