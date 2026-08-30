@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/rambaarde/create-ai-memory/compare/v0.10.0...v0.11.0) (2026-08-30)
+
+
+### Features
+
+* **ai-mem:** add --hops to ai-mem-search, one hop out along wikilinks ([547495e](https://github.com/rambaarde/create-ai-memory/commit/547495ee491eec1f8a1bf817930213a5e0086868))
+* **ai-mem:** add --hops to ai-mem-search, one hop out along wikilinks ([79044c9](https://github.com/rambaarde/create-ai-memory/commit/79044c9c0f765078046308c85fcf18c801ab6621))
+
 ## [0.10.0](https://github.com/rambaarde/create-ai-memory/compare/v0.9.1...v0.10.0) (2026-08-30)
 
 
