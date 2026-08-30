@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/rambaarde/create-ai-memory/compare/v0.11.0...v0.11.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **ai-mem:** make ai-mem-search's hop-expansion the default, not a flag ([68b2ce0](https://github.com/rambaarde/create-ai-memory/commit/68b2ce086b060ea6b6e19168cc33bec3070c465f))
+* **ai-mem:** make ai-mem-search's hop-expansion the default, not a flag ([2c02993](https://github.com/rambaarde/create-ai-memory/commit/2c0299365f8ef1488e4eefd05a4ea52b939eadfc))
+
 ## [0.11.0](https://github.com/rambaarde/create-ai-memory/compare/v0.10.0...v0.11.0) (2026-08-30)
 
 
