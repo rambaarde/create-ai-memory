@@ -401,8 +401,10 @@ echo "nothing relevant here" > "$SEARCHVAULT/_session_logs/searchproj2/searchpro
 
 _OLD_AI_MEM_ROOT="$AI_MEM_ROOT"
 _OLD_SESSION_DIR2="$AI_MEM_SESSION_DIR"
+_OLD_PROJECT_DIR2="$AI_MEM_PROJECT_DIR"
 AI_MEM_ROOT="$SEARCHVAULT"
 AI_MEM_SESSION_DIR="$SEARCHVAULT/_session_logs"
+AI_MEM_PROJECT_DIR="$SEARCHVAULT/_projects"
 
 succeeds 'ai-mem-search "the answer"'                    "ai-mem-search finds a term present in the vault"
 has "$(ai-mem-search "the answer")" "searchproj1"        "ai-mem-search reports the matching file"
@@ -410,6 +412,19 @@ fails 'ai-mem-search "nope-not-here"'                     "ai-mem-search exits n
 has "$(ai-mem-search "nope-not-here")" "no matches"       "ai-mem-search prints an explicit empty state, not silence"
 fails 'ai-mem-search "the answer" searchproj2'            "ai-mem-search scoped to a project without the term finds nothing"
 succeeds 'ai-mem-search "the answer" searchproj1'         "ai-mem-search scoped to the right project finds it"
+
+mkdir -p "$SEARCHVAULT/_projects"
+print -r -- $'---\ntype: ai-project-context\nproject_name: searchproj1\n---\n\n# Project Snapshot\n* **Purpose:** internal tool for testing the search layer' \
+  > "$SEARCHVAULT/_projects/searchproj1.md"
+echo "the answer involves [[searchproj1]] specifically" > "$SEARCHVAULT/_session_logs/searchproj2/searchproj2-2026-02-02_00-00-00.md"
+HOPS_OUT="$(ai-mem-search "the answer" --hops)"
+hasnt "$(ai-mem-search "the answer")" "one hop out" "ai-mem-search without --hops does not follow links"
+has "$HOPS_OUT" "one hop out"                       "ai-mem-search --hops adds a hop section when a match links out"
+has "$HOPS_OUT" "_projects/searchproj1.md"           "ai-mem-search --hops resolves the [[wikilink]] to its target note"
+has "$HOPS_OUT" "internal tool for testing the search layer" \
+  "ai-mem-search --hops shows the linked project's Purpose as an excerpt"
+HOPS_NOLINK_OUT="$(ai-mem-search "nothing relevant" --hops)"
+hasnt "$HOPS_NOLINK_OUT" "one hop out" "ai-mem-search --hops adds nothing when no match links anywhere"
 fails 'ai-mem-search'                                     "ai-mem-search fails without a search term"
 fails 'ai-mem-search "x" no-such-project'                 "ai-mem-search fails cleanly for an unknown project"
 
@@ -428,6 +443,7 @@ hasnt "$RECENCY_OUT" "ts=" "ai-mem-search never leaks its internal sort-key vari
 
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
+AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
