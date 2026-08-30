@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0](https://github.com/rambaarde/create-ai-memory/compare/v0.7.1...v0.8.0) (2026-08-30)
+
+
+### Features
+
+* **ai-mem:** add ai-lesson for cross-project decisions and mistakes ([4ef3a63](https://github.com/rambaarde/create-ai-memory/commit/4ef3a63fee9eabe4c9d96fba29860eabc6a31d57))
+* **ai-mem:** add ai-lesson for cross-project decisions and mistakes ([b936ca5](https://github.com/rambaarde/create-ai-memory/commit/b936ca5a1a1145719a1b68e0eb7296aa2e416373))
+* **hooks:** add PreCompact hook to nudge ai-note before auto-compact ([b76c8ef](https://github.com/rambaarde/create-ai-memory/commit/b76c8ef0b33b83303d04066590caa9b9bd81c96e))
+* **hooks:** add PreCompact hook to nudge ai-note before auto-compact ([4c4ee6d](https://github.com/rambaarde/create-ai-memory/commit/4c4ee6dbacba72f4b0422c38c5a030a295a73dd2))
+
 ## [0.7.1](https://github.com/rambaarde/create-ai-memory/compare/v0.7.0...v0.7.1) (2026-08-29)
 
 
