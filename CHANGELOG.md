@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.3](https://github.com/rambaarde/create-ai-memory/compare/v0.8.2...v0.8.3) (2026-08-30)
+
+
+### Bug Fixes
+
+* **ai-mem:** guide ai-lesson entries to state the problem before the fix ([0609028](https://github.com/rambaarde/create-ai-memory/commit/0609028a7db620d03b05af69f848ec9540844185))
+* **ai-mem:** guide ai-lesson entries to state the problem before the fix ([510c3b7](https://github.com/rambaarde/create-ai-memory/commit/510c3b79002e26c79032d5f1a6e8757cadfc7f9c))
+
 ## [0.8.2](https://github.com/rambaarde/create-ai-memory/compare/v0.8.1...v0.8.2) (2026-08-30)
 
 
