@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.2](https://github.com/rambaarde/create-ai-memory/compare/v0.8.1...v0.8.2) (2026-08-30)
+
+
+### Bug Fixes
+
+* **ai-mem:** quote {{topic}} in the lesson template, wikilink the project tag ([8c4eb37](https://github.com/rambaarde/create-ai-memory/commit/8c4eb3732e643014b4307d0e588883e93bb25c72))
+* **ai-mem:** quote {{topic}} in the lesson template, wikilink the project tag ([a72309d](https://github.com/rambaarde/create-ai-memory/commit/a72309d7c43567b1600b798a2ec6b8bebdf5e2d8))
+
 ## [0.8.1](https://github.com/rambaarde/create-ai-memory/compare/v0.8.0...v0.8.1) (2026-08-30)
 
 
