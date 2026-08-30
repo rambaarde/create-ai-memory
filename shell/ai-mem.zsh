@@ -596,7 +596,7 @@ ai-lesson() {
         fi
     fi
 
-    printf -- '\n- %s [%s] %s\n' "$timestamp" "$project_name" "$text" >> "$lesson_file"
+    printf -- '\n- %s [[%s]] %s\n' "$timestamp" "$project_name" "$text" >> "$lesson_file"
     printf 'Appended to %s\n' "$lesson_file"
 }
 # Lints the vault's links: session logs missing a project wikilink, previous
