@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.3](https://github.com/rambaarde/create-ai-memory/compare/v0.11.2...v0.11.3) (2026-08-30)
+
+
+### Performance Improvements
+
+* **ai-mem:** sort search results in one awk pass, not a subprocess per line ([8c1e603](https://github.com/rambaarde/create-ai-memory/commit/8c1e60318322211dd3c46b1779bd16a2ed15dd06))
+* **ai-mem:** sort search results in one awk pass, not a subprocess per line ([ce352d7](https://github.com/rambaarde/create-ai-memory/commit/ce352d78692229984c872dd07a6d3d78b3df1e90))
+
 ## [0.11.2](https://github.com/rambaarde/create-ai-memory/compare/v0.11.1...v0.11.2) (2026-08-30)
 
 
