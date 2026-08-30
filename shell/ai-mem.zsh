@@ -308,7 +308,7 @@ $previous_session_block
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
-For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH.
+For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
 When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <problem> <solution>\` -- e.g. \`ai-lesson rate-limiting "a fixed-window limiter kept losing bursts of legitimate traffic" "switched to a token bucket, which absorbs bursts correctly"\`. It appends a dated Problem/Solution entry to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
 EOF
 }
@@ -711,8 +711,17 @@ ai-mem-search() {
         fi
     fi
 
+    # -i: a case-sensitive default silently returns a confident "no matches"
+    # for a term the vault genuinely holds under different casing. Measured on
+    # a real vault: `precompact` found 0 case-sensitively and 3 with -i;
+    # `Postgres` 56 vs 90. A false empty state is the worst possible answer
+    # from a memory tool, because it is indistinguishable from the truth --
+    # and the explicit empty-state message below is exactly what makes it
+    # look authoritative.
+    # -F: the caller is usually an agent passing a free-text term, where a
+    # stray . ( | must match literally rather than as a regex metacharacter.
     local raw
-    raw="$(grep -rn --exclude-dir=.git --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
+    raw="$(grep -rniF --exclude-dir=.git --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
 
     if [[ -z "$raw" ]]; then
         print -r -- "no matches for '$term' in $search_root"
@@ -729,9 +738,33 @@ ai-mem-search() {
         print -r -- "${ts:-0000-00-00_00-00-00}|${line}"
     done | sort -r | cut -d'|' -f2-)"
 
-    print -r -- "$sorted"
+    # Bound the output. The consumer is normally an agent with a finite
+    # context window, and an unbounded dump is actively harmful there in a
+    # way it is not for a human who skims: a common term produced ~29k
+    # tokens on a real vault, overflowing the host's tool-response cap and
+    # getting silently truncated, so the agent could not tell "hidden" from
+    # "absent". Near-miss padding is also the most damaging kind of
+    # distractor for a model, so fewer, cleaner hits beat more of them.
+    # Count goes FIRST -- the reader needs the size of the result set before
+    # the result set, not after it.
+    local total limit
+    total="$(print -r -- "$raw" | wc -l | tr -d ' ')"
+    limit="${AI_MEM_SEARCH_LIMIT:-40}"
+
+    print -r -- "$total match(es) for '$term'"
+    print -r -- "paths below $search_root"
     print -r -- "--"
-    print -r -- "$(print -r -- "$raw" | wc -l | tr -d ' ') match(es) for '$term'"
+    # Strip the repeated vault root (a third to a half of all output bytes on
+    # a real vault, with zero information lost -- it is printed once above)
+    # and clamp very long lines, which are common in prose notes.
+    print -r -- "$sorted" | head -n "$limit" \
+        | sed "s|^${search_root}/||" \
+        | awk '{ if (length($0) > 200) print substr($0, 1, 200) " [...]"; else print }'
+
+    if (( total > limit )); then
+        print -r -- "--"
+        print -r -- "showing $limit of $total ($(( total - limit )) hidden) -- narrow with: ai-mem-search '$term' <project>, or raise AI_MEM_SEARCH_LIMIT"
+    fi
     # One hop out: resolve [[wikilinks]] found on matched lines to their
     # target note (currently: project notes only -- the confirmed use case
     # is a _lessons entry linking the project(s) it hit) and show a short
