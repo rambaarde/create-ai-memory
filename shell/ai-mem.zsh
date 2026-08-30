@@ -732,11 +732,20 @@ ai-mem-search() {
     # relevant one, so a large result set stays usable at a glance even without
     # ranking. Sort key is the YYYY-MM-DD_HH-MM-SS embedded in the filename;
     # lines with no such timestamp (e.g. _Global_Profile.md) sort last.
-    local sorted ts
-    sorted="$(print -r -- "$raw" | while IFS= read -r line; do
-        ts="$(print -r -- "$line" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}' | head -1)"
-        print -r -- "${ts:-0000-00-00_00-00-00}|${line}"
-    done | sort -r | cut -d'|' -f2-)"
+    #
+    # One awk pass, not a shell loop. This used to spawn `grep -oE` AND `head`
+    # per matched line, which cost 25s for a common term on a 486-file vault
+    # -- while the grep that actually searched it took 0.16s. Measuring grep
+    # alone said this command was fast; measuring the command said otherwise.
+    # Interval syntax like {4} is avoided so this works on a stock BSD awk.
+    local sorted
+    sorted="$(print -r -- "$raw" | awk '
+        {
+            ts = "0000-00-00_00-00-00"
+            if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
+                ts = substr($0, RSTART, RLENGTH)
+            print ts "|" $0
+        }' | sort -r | cut -d'|' -f2-)"
 
     # Bound the output. The consumer is normally an agent with a finite
     # context window, and an unbounded dump is actively harmful there in a
