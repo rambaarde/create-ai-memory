@@ -427,6 +427,52 @@ hasnt "$HOPS_NOLINK_OUT" "one hop out" "ai-mem-search adds nothing when no match
 fails 'ai-mem-search'                                     "ai-mem-search fails without a search term"
 fails 'ai-mem-search "x" no-such-project'                 "ai-mem-search fails cleanly for an unknown project"
 
+# --- ai-mem-search is agent-facing: correctness and bounded output ----------
+# A case-sensitive default made the tool report a confident "no matches" for
+# a term the vault did hold under different casing -- measured on the real
+# vault, `precompact` found 0 vs 3 with -i. A false empty state is worse than
+# a noisy one because it is indistinguishable from the truth.
+# (deliberately avoids the word the recency test below searches for -- now
+# that matching is case-insensitive, a fixture containing it would silently
+# become that test's newest hit)
+echo "A CamelCase Token here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-07-07_07-00-00.md"
+succeeds 'ai-mem-search camelcase' "ai-mem-search matches case-insensitively, so a casing mismatch is not a false empty state"
+has "$(ai-mem-search camelcase)" "CamelCase" "ai-mem-search returns the differently-cased hit"
+
+# -F: the caller is usually an agent passing a free-text term; regex
+# metacharacters in it must match literally rather than blowing up or
+# silently matching something else.
+echo 'literal a.b(c) token' > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-07-08_07-00-00.md"
+succeeds 'ai-mem-search "a.b(c)"' "ai-mem-search treats regex metacharacters in the term literally"
+fails 'ai-mem-search "a.b(X)"'    "ai-mem-search does not spuriously match a near-miss metachar term"
+
+# Bounded output: an unbounded dump overflowed the host's tool-response cap
+# on a real vault (~29k tokens for one ordinary term) and was silently
+# truncated, leaving the agent unable to tell "hidden" from "absent".
+BOUNDVAULT_DIR="$SEARCHVAULT/_session_logs/searchproj1"
+for i in $(seq 1 12); do
+  echo "boundedterm occurrence $i" > "$BOUNDVAULT_DIR/searchproj1-2026-09-$(printf '%02d' $i)_00-00-00.md"
+done
+BOUND_OUT="$(AI_MEM_SEARCH_LIMIT=5 ai-mem-search boundedterm)"
+is "$(print -r -- "$BOUND_OUT" | grep -c '^_session_logs/')" "5" "ai-mem-search caps the number of result lines at AI_MEM_SEARCH_LIMIT"
+has "$BOUND_OUT" "12 match(es)"  "ai-mem-search reports the true total even when it shows fewer"
+has "$BOUND_OUT" "7 hidden"      "ai-mem-search says explicitly how many results it withheld"
+has "$BOUND_OUT" "narrow with"   "ai-mem-search suggests a concrete next step when it truncates"
+hasnt "$(ai-mem-search boundedterm)" "hidden" "ai-mem-search adds no truncation notice when nothing was withheld"
+
+# The count must lead: a reader with a bounded context window needs the size
+# of the result set before the result set, not after it.
+has "$(print -r -- "$BOUND_OUT" | head -1)" "12 match(es)" "ai-mem-search prints the match count as the very first line"
+
+# Paths are printed relative to a root stated once, rather than repeating an
+# absolute prefix on every line (a third to a half of all output bytes on a
+# real vault).
+ROOTSTRIP_OUT="$(ai-mem-search "the answer")"
+has   "$ROOTSTRIP_OUT" "paths below $SEARCHVAULT" "ai-mem-search states the root once in a header"
+has   "$ROOTSTRIP_OUT" "_session_logs/searchproj1/" "ai-mem-search prints result paths relative to that root"
+hasnt "$(print -r -- "$ROOTSTRIP_OUT" | grep '^_session_logs/')" "$SEARCHVAULT" \
+  "ai-mem-search does not repeat the absolute root on every result line"
+
 # Recency ordering: three dated hits, newest must come first, oldest last,
 # and the output must contain nothing but the expected lines (regression
 # guard for a real zsh bug hit while building this -- `local` re-declared on
@@ -436,8 +482,13 @@ echo "needle here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-01
 echo "needle here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-06-15_12-30-00.md"
 echo "needle here" > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-03-10_08-00-00.md"
 RECENCY_OUT="$(ai-mem-search needle)"
-has "$(print -r -- "$RECENCY_OUT" | sed -n '1p')" "2026-06-15_12-30-00" "ai-mem-search sorts the newest match first"
-has "$(print -r -- "$RECENCY_OUT" | sed -n '3p')" "2026-01-01_00-00-00" "ai-mem-search sorts the oldest match last"
+# Filter to just the result lines rather than indexing by absolute line
+# number -- the output carries a header (count, root, separator) and an
+# earlier version of this test broke purely because that header shifted the
+# offsets, which says nothing about whether the sort itself works.
+RECENCY_HITS="$(print -r -- "$RECENCY_OUT" | grep -E '^_session_logs/')"
+has "$(print -r -- "$RECENCY_HITS" | head -1)" "2026-06-15_12-30-00" "ai-mem-search sorts the newest match first"
+has "$(print -r -- "$RECENCY_HITS" | tail -1)" "2026-01-01_00-00-00" "ai-mem-search sorts the oldest match last"
 hasnt "$RECENCY_OUT" "ts=" "ai-mem-search never leaks its internal sort-key variable into the output"
 
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
