@@ -262,7 +262,7 @@ Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH.
-When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <text>\` -- e.g. \`ai-lesson rate-limiting "used a token bucket, fixed window kept losing bursts"\`. It appends to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
+When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <text>\`. State the problem first, then the fix -- e.g. \`ai-lesson rate-limiting "a fixed-window limiter kept losing bursts of legitimate traffic; switched to a token bucket, which absorbs bursts correctly"\`, not just the fix alone. It appends to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
 EOF
 }
 
