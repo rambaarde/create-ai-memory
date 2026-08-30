@@ -491,6 +491,30 @@ has "$(print -r -- "$RECENCY_HITS" | head -1)" "2026-06-15_12-30-00" "ai-mem-sea
 has "$(print -r -- "$RECENCY_HITS" | tail -1)" "2026-01-01_00-00-00" "ai-mem-search sorts the oldest match last"
 hasnt "$RECENCY_OUT" "ts=" "ai-mem-search never leaks its internal sort-key variable into the output"
 
+# Performance regression guard. The recency sort once spawned two
+# subprocesses PER MATCHED LINE, which cost 25s for a common term on a real
+# 486-file vault while the grep underneath it took 0.16s -- a bug every
+# correctness test above passed straight through. The bound here is
+# deliberately loose (this completes in well under a second once the sort is
+# a single awk pass); it exists to catch a return to per-line subprocess
+# spawning, not to police small changes.
+PERFDIR="$SEARCHVAULT/_session_logs/searchproj2"
+for i in $(seq 1 400); do
+  printf 'perfneedle line one\nperfneedle line two\nperfneedle line three\n' \
+    > "$PERFDIR/searchproj2-2026-10-$(printf '%02d' $(( (i % 28) + 1 )))_$(printf '%02d' $(( i % 24 )))-00-00.md"
+done
+PERF_START=$(date +%s)
+AI_MEM_SEARCH_LIMIT=5 ai-mem-search perfneedle >/dev/null 2>&1
+PERF_ELAPSED=$(( $(date +%s) - PERF_START ))
+# Bound chosen by measuring both implementations at exactly this fixture
+# size: the awk version takes 0.009s, the old per-line-subprocess version
+# 6.9s. A 10s bound looked generous but would have let the regression pass;
+# 3s keeps a ~300x margin for the correct path while still failing the
+# broken one by more than 2x.
+[[ "$PERF_ELAPSED" -lt 3 ]] \
+  && ok  "ai-mem-search sorts a large result set without per-line subprocess spawning (${PERF_ELAPSED}s)" \
+  || nok "ai-mem-search sorts a large result set without per-line subprocess spawning (took ${PERF_ELAPSED}s, expected <3s)"
+
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
