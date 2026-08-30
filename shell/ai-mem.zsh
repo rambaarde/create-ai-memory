@@ -11,6 +11,19 @@ AI_MEM_HOME="${0:A:h}"
 # vault on first use so install.sh is optional (plugin-manager installs work).
 AI_MEM_TEMPLATE_SRC="${AI_MEM_HOME:h}/vault-template"
 
+# Fingerprint of the module files, recorded at source time and re-checked at
+# launch. A shell keeps whatever function definitions it loaded at startup:
+# editing these files, or upgrading the package, changes nothing in a
+# terminal that is already open. That is a silent trap rather than an
+# obvious one -- the launcher still runs, still reports success, and quietly
+# uses whatever behaviour was current whenever this terminal was opened,
+# which can be months. Comparing the two makes the staleness visible.
+# cksum is POSIX, so this needs no macOS/Linux branch.
+_ai_mem_fingerprint() {
+    cksum "$AI_MEM_HOME/ai-mem.zsh" "$AI_MEM_HOME/adapters.zsh" 2>/dev/null \
+        | awk '{ printf "%s-", $1 }'
+}
+export AI_MEM_SOURCED_FINGERPRINT="$(_ai_mem_fingerprint)"
 # Vault root. Override in ~/.zshrc; defaults to a hidden dir under $HOME.
 : "${AI_MEM_ROOT:=$HOME/.ai-memory/_Ai_Memory}"
 if [[ -d "$AI_MEM_ROOT" ]]; then
@@ -450,6 +463,16 @@ _ai_session_start() {
         shift
     fi
 
+    # Warn (never block) if this shell is running a stale copy. Everything
+    # below would otherwise succeed quietly using the old behaviour, and the
+    # only symptom is a fix that appears not to have worked.
+    local _fp_now
+    _fp_now="$(_ai_mem_fingerprint)"
+    if [[ -n "$AI_MEM_SOURCED_FINGERPRINT" && -n "$_fp_now" \
+          && "$_fp_now" != "$AI_MEM_SOURCED_FINGERPRINT" ]]; then
+        echo "ai-memory: this shell loaded an older copy of ai-mem; the files on disk have changed since." >&2
+        echo "           Run 'source ~/.zshrc' or open a new terminal to pick up the current version." >&2
+    fi
     local session_prompt="${*:-}"
 
     # Fail fast with a clear message if the agent's CLI is missing, before a
