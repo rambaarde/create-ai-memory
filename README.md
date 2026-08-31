@@ -346,6 +346,35 @@ regenerate, and nothing to go stale -- a note is searchable the moment it is
 written. Every flag below exists because the alternative produced a wrong
 answer on a real vault.
 
+```mermaid
+flowchart TD
+    A["ai-mem-search &lt;term&gt; [project]"] --> B{"scope"}
+    B -->|"no project arg"| C["whole vault<br/>projects · lessons · logs · proposals"]
+    B -->|"project arg"| D["that project's session logs only"]
+    C --> E["grep -rniF<br/><b>-i</b> casing is not a false empty<br/><b>-F</b> a stray dot or paren matches itself"]
+    D --> E
+    E -->|"0 hits"| Z["<b>no matches for 'term' in &lt;root&gt;</b><br/>exit 1 — an empty result says so plainly"]
+    E -->|"n hits"| F["awk · lift YYYY-MM-DD_HH-MM-SS<br/>out of each path into a sort key"]
+    F --> G["sort -r · newest first<br/>undated notes sort last"]
+    G --> H["head -n AI_MEM_SEARCH_LIMIT<br/>default 40"]
+    H --> I["strip the vault root · clamp lines past 200 chars"]
+    I --> J["<b>count first</b>, then results,<br/>then 'N hidden' + how to narrow"]
+    F -.->|"scan matched lines for wikilinks"| K["one hop out<br/>resolve each to its project note<br/>+ a one-line excerpt"]
+    J --> L(["what the agent reads"])
+    K --> L
+
+    classDef term fill:#0d9488,stroke:#0f766e,color:#fff
+    classDef guard fill:#b45309,stroke:#92400e,color:#fff
+    classDef out fill:#1e3a8a,stroke:#1e40af,color:#fff
+    class A term
+    class Z guard
+    class L out
+```
+
+Every stage exists to stop one specific wrong answer, and the two shaded
+boxes are the ones that matter most: an empty result that is *honest*, and
+an output an agent can read to the end.
+
 ```console
 $ ai-mem-search prisma
 238 match(es) for 'prisma'
