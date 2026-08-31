@@ -295,6 +295,43 @@ __ai_mem_cap_field() {
     fi
 }
 
+# An agent cannot search for knowledge it does not know exists, and the
+# lesson bodies are far too large to inject -- but a slug like
+# prisma-connection-pool-exhaustion is already the lesson compressed to a
+# handful of tokens. Listing the names turns a blind guess into a precise
+# ai-mem-search, at roughly 4 tokens per lesson. Recognition is the point;
+# recall is what the agent is bad at.
+#
+# Names only, never bodies. The cap exists because this stops paying for
+# itself once most entries are irrelevant to the session at hand: a long
+# tail of near-miss titles is the most damaging kind of distractor for a
+# model, which is the same reason ai-mem-search bounds its own output.
+# Newest first, so the cap drops the stalest rather than the alphabetically
+# unlucky.
+__ai_mem_lesson_index() {
+    local dir="$AI_MEM_ROOT/_lessons"
+    [[ -d "$dir" ]] || return 0
+
+    # (N) tolerate an empty dir, (.) files only, (om) newest mtime first,
+    # (:t:r) basename without the extension. Then drop _lesson_template.
+    local -a slugs
+    slugs=("$dir"/*.md(N.om:t:r))
+    slugs=(${slugs:#_*})
+    (( $#slugs )) || return 0
+
+    local limit="${AI_MEM_LESSON_INDEX_LIMIT:-200}"
+    local total=$#slugs extra=0
+    if (( total > limit )); then
+        extra=$(( total - limit ))
+        slugs=(${slugs[1,$limit]})
+    fi
+
+    print -r -- "- Lessons already recorded ($total), listed by topic slug only -- the bodies are NOT included here. If one looks relevant to the task at hand, read it with \`ai-mem-search <slug>\` before solving the problem again from scratch."
+    print -r -- "  ${(j:, :)slugs}"
+    (( extra )) && print -r -- "  (+$extra older, not listed; \`ls \$AI_MEM_ROOT/_lessons\` for the rest)"
+    return 0
+}
+
 __ai_mem_context_prompt() {
     local project_note="${1:-}"
     local previous_session_note="${2:-}"
@@ -340,6 +377,7 @@ $(__ai_mem_note_contents "$AI_MEM_STANDARDS")
 - Project context: $project_note
 $previous_session_block
 - Active session log: $session_note
+$(__ai_mem_lesson_index)
 
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
