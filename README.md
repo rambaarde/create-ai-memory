@@ -189,6 +189,7 @@ off last time.
 **Getting started**
 
 - [Quickstart](#quickstart)
+- [Benchmarks](#benchmarks)
 - [Install](#install)
 - [Commands](#commands)
 - [How search works](#how-search-works)
@@ -233,6 +234,60 @@ off last time.
 | **Obsidian-native** | The vault is plain Markdown, so it opens as an Obsidian second brain with graph view and backlinks, or as plain files with grep. |
 | **Guardrails built in** | Every write is checked to stay inside the vault, and a commit hook refuses commits made without the vault context loaded. |
 | **Zero runtime deps** | No daemon, no database, no API key, no server. It runs in your shell. |
+
+## Benchmarks
+
+Measured on a real 495-note vault (4.9 MB of Markdown), macOS, warm cache.
+Every number below is reproducible with the command beside it.
+
+**Tokens** — what the agent pays, every session
+
+| | before | after | |
+|---|---|---|---|
+| Launch prompt | 7,207 | **4,321** | −40%, mirrored notes injected once ([why](#mirrored-notes-are-not-injected-twice)) |
+| Search result, common term | 10,234 | **1,752** | −83%, bounded output ([why](#how-search-works)) |
+| Lesson index, 96 lessons | — | **+829** | ~8 tokens per lesson, names only ([why](#lessons-are-indexed-not-injected)) |
+
+```sh
+# launch prompt
+ai-context | wc -c            # chars; divide by ~4 for tokens
+# search output, bounded vs not
+ai-mem-search postgres | wc -c
+AI_MEM_SEARCH_LIMIT=999999 ai-mem-search postgres | wc -c
+```
+
+**Speed**
+
+| | |
+|---|---|
+| Search, common term, 238 hits | **0.07 s** |
+| Shell startup cost of the module | **< 0.01 s** |
+| Recency sort, v0.11.0 regression fix | 25.4 s → **0.54 s** (47×) |
+
+```sh
+time ai-mem-search postgres >/dev/null
+time zsh -c 'source shell/ai-mem.zsh'
+```
+
+The 47× is worth stating plainly because it was self-inflicted. The sort
+spawned two subprocesses per matched line -- about 18,000 processes for one
+query -- while the `grep` underneath it took 0.16 s. Benchmarking `grep`
+alone said the command was fast; benchmarking the command said otherwise.
+A regression guard now bounds it, with the bound set by measuring both
+implementations rather than guessing.
+
+**Footprint**
+
+| | |
+|---|---|
+| Runtime dependencies | **0** |
+| Package | **35 kB** (99.7 kB unpacked, 19 files) |
+| Index, daemon, database, embeddings | **none** — a note is searchable the moment it is written |
+| Tests | **153**, no network, no framework |
+
+```sh
+npm pack --dry-run && zsh tests/run.sh
+```
 
 ## Install
 
