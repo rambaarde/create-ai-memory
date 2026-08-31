@@ -585,7 +585,7 @@ print -rl -- "---" "type: ai-lesson" "---" "# A Lesson" "seen on [[demo]]" > "$G
 print -rl -- "---" "type: ai-lesson" "---" "# Orphan" "points at [[nothing-here]]" > "$GVAULT/_lessons/orphan.md"
 
 GPORT=7793
-AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" >/dev/null 2>&1 &
+AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" --no-open >/dev/null 2>&1 &
 GPID=$!
 SERVERS+=($!)
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -937,6 +937,38 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 # builtins; adding one grep would have broken it silently.
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
+
+# --- the suite must never hijack a browser -----------------------------------
+# ai-mem-serve opens a tab by default, which is right when a person asks to
+# see their memory and wrong every other time. One spawn here predated that
+# behaviour and popped a window showing the 3-note test fixture on every run.
+# Asserted rather than remembered.
+SPAWNS_WITHOUT_NOOPEN="$(grep -n 'ai-mem-serve\.js' "$REPO_ROOT/tests/run.sh" | grep -v -- '--no-open' || true)"
+is "$SPAWNS_WITHOUT_NOOPEN" "" "no test starts ai-mem-serve without --no-open"
+
+# --- lessons outrank session logs --------------------------------------------
+# The case that matters most is hitting a blocker you have hit before, and
+# recency alone got it exactly wrong: session logs outnumber lessons about
+# four to one and are always newer, so they swept the results. On a real vault
+# "snapshot" returned 25 session logs and none of the three lessons that
+# answer it. The durable answer was in the vault and unreachable.
+RANKVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$RANKVAULT/_lessons" "$RANKVAULT/_session_logs/p"
+print -rl -- "---" "type: ai-lesson" "---" "the widget always jams" > "$RANKVAULT/_lessons/old-lesson.md"
+for i in 1 2 3 4 5 6; do
+  print -rl -- "---" "type: ai-session-log" "---" "mentioned the widget in passing" \
+    > "$RANKVAULT/_session_logs/p/p-2026-12-0${i}_00-00-00.md"
+done
+
+RANK_OUT="$(AI_MEM_ROOT="$RANKVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-search widget
+')"
+# The lesson is the OLDEST file here, so recency alone would bury it last.
+has "$(print -r -- "$RANK_OUT" | sed -n '4p')" "_lessons/" \
+    "a lesson outranks newer session logs, even when it is the oldest match"
+is  "$(print -r -- "$RANK_OUT" | sed -n '5p' | grep -c '_session_logs/')" "1" \
+    "session logs still follow, newest first, after the lessons"
 
 # --- search spreads its budget across files ----------------------------------
 # The line budget used to go to whichever note was chattiest. Measured on a
