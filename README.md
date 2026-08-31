@@ -191,6 +191,7 @@ off last time.
 - [Quickstart](#quickstart)
 - [Install](#install)
 - [Commands](#commands)
+- [How search works](#how-search-works)
 
 </td>
 <td valign="top" width="33%">
@@ -280,6 +281,94 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
 Project is auto-resolved from the current git repo; pass a name to override.
+
+## How search works
+
+`ai-mem-search` is one `grep -rniF` over the vault, then sort, then a cap.
+There is no index to rebuild, no daemon to keep running, no embeddings to
+regenerate, and nothing to go stale -- a note is searchable the moment it is
+written. Every flag below exists because the alternative produced a wrong
+answer on a real vault.
+
+```console
+$ ai-mem-search prisma
+238 match(es) for 'prisma'
+paths below /Users/you/_Ai_Memory
+--
+_session_logs/stashlify/stashlify-2026-08-31_00-00-00.md:56:  - **A green deploy log is not evidence a migration ran.** Verify against `_prisma_migrations`.
+_session_logs/stashlify/stashlify-2026-08-31_00-00-00.md:55:  - **`prisma migrate deploy` cannot see `prisma/migrations/<name>.sql`.** Only `<name>/migration.sql`. It skips loose files silently -- a  [...]
+...
+--
+showing 40 of 238 (198 hidden) -- narrow with: ai-mem-search 'prisma' <project>, or raise AI_MEM_SEARCH_LIMIT
+```
+
+**Case-insensitive (`-i`).** A false empty state is the worst answer a memory
+tool can give, because it is indistinguishable from the truth -- and the
+explicit `no matches` message is exactly what makes it look authoritative.
+Measured on a real vault: `precompact` found 0 matches case-sensitively and 3
+with `-i`; `Postgres` found 56 versus 90.
+
+**Literal, not regex (`-F`).** The caller is usually an agent passing free
+text, where a stray `.`, `(` or `|` must match itself. `ai-mem-search .env`
+finds `.env`, not every four-character string ending in `env`.
+
+**Newest first.** The sort key is the `YYYY-MM-DD_HH-MM-SS` embedded in the
+log filename. For a time series the most recent match is usually the relevant
+one, so a large result set stays useful at a glance without any relevance
+ranking. Files with no timestamp in the name (`_Global_Profile.md`, project
+notes) sort last.
+
+**Bounded output.** The count comes first, before the results -- you need the
+size of the result set to interpret it. Then at most `AI_MEM_SEARCH_LIMIT`
+lines (default 40), and if anything was withheld, an explicit `N hidden` line
+with the command to narrow. This is for the agent, not for you: an unbounded
+dump of a common term ran ~29k tokens, overflowed the host's tool-response
+cap, and got silently truncated -- leaving the agent unable to tell "hidden"
+from "absent". Near-miss padding is also the most damaging kind of distractor
+for a model, so fewer clean hits beat more of them.
+
+**Compact lines.** The vault root is printed once in the header and stripped
+from every result path (a third to a half of all output bytes on a real
+vault, no information lost). Lines longer than 200 characters are clamped
+with `[...]`, since prose notes routinely run long.
+
+**One hop out.** Any `[[wikilink]]` on a matched line is resolved to its
+project note and shown with a one-line excerpt under `one hop out:`. A
+`_lessons` entry names the projects it came from, so a hit there tells you
+where it happened without a second search. Always on, not a flag to remember.
+
+```console
+$ ai-mem-search '[[create-ai-memory]]'
+11 match(es) for '[[create-ai-memory]]'
+...
+--
+one hop out:
+  [[create-ai-memory]] -> /Users/you/_Ai_Memory/_projects/create-ai-memory.md
+    * **Current Objective:** ship the vault-backup fix
+```
+
+(That query is also `-F` earning its keep: `[[` is matched literally, not as
+a character class.)
+
+**Scoping.** A second argument restricts the search to one project's session
+logs -- `ai-mem-search postgres stashlify`. Unknown project names fail
+explicitly rather than silently searching everything.
+
+### What it deliberately is not
+
+Substring matching, not word matching: `git` also hits `github` and
+`gitignore`. No stemming, no fuzzy matching, no synonyms, no relevance
+ranking, no vector search. A term you half-remember will miss.
+
+That is a real limit, and the way around it is the search strategy rather
+than the search engine: **start broad and narrow down.** A first query that is
+too specific is the usual way to miss what you were looking for. Search
+`postgres` before `postgres connection pool timeout`, then add the project
+argument once you can see roughly where the answer lives.
+
+Returns non-zero on no matches, a missing term, or an unknown project, so it
+composes in a script.
+
 
 ## Session skills (optional)
 
@@ -435,6 +524,7 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_ROOT` | `$HOME/.ai-memory/_Ai_Memory` | Vault root. Point at any folder, including an existing Obsidian vault |
 | `AI_MEM_AGENTS` | `claude codex gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
+| `AI_MEM_SEARCH_LIMIT` | `40` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
 
 ## Why plain files
 
