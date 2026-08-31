@@ -204,6 +204,7 @@ off last time.
 - [Open Knowledge Format](#open-knowledge-format)
 - [Add another agent](#add-another-agent)
 - [Integrations](#integrations)
+- [GUI clients (MCP)](#gui-clients-mcp)
 - [Configuration](#configuration)
 
 </td>
@@ -226,7 +227,7 @@ off last time.
 
 | | |
 |---|---|
-| **Cross-agent memory** | One vault serves Claude Code, Codex, Gemini, Cursor, and opencode. Context earned in one reaches the next. |
+| **Cross-agent memory** | One vault serves Claude Code, Codex, Gemini, Cursor, and opencode — and GUI clients like Claude Desktop through an MCP server. Context earned in one reaches the next. |
 | **Automatic carryover** | A Stop hook writes the branch, the commits you made, and uncommitted changes into the session log, so tomorrow's run resumes where today's ended. |
 | **Per-project context** | Each git repo gets its own note for purpose, architecture, and decisions, injected only for that project. |
 | **Your rules, everywhere** | A global profile and standards note ride along in every session, on every project. |
@@ -688,6 +689,42 @@ private helpers with it. A one-underscore helper simply will not exist inside
 an agent-run command.
 
 ## Integrations
+
+### GUI clients (MCP)
+
+The `*-start` launchers reach an agent by injecting the vault into its opening
+prompt. **A GUI opened from the Dock never runs one** — there is no daemon and
+no background service, so Claude Desktop and the Cursor GUI would otherwise
+see nothing.
+
+`ai-mem-mcp` is the channel for those. Register it once:
+
+**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "ai-memory": {
+      "command": "ai-mem-mcp",
+      "env": { "AI_MEM_ROOT": "/absolute/path/to/your/_Ai_Memory" }
+    }
+  }
+}
+```
+
+**Cursor** — `~/.cursor/mcp.json`, same shape.
+
+Four tools: `search_memory` (the same search, optionally scoped to a project),
+`get_context` (the block the launchers inject), `read_note`, and
+`list_lessons`. Each one shells out to the same zsh functions the CLI uses, so
+there is one implementation of the rules rather than a copy that drifts.
+`read_note` compares resolved real paths and refuses anything outside the
+vault.
+
+**Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
+opencode all have a shell and should call `ai-mem-search` directly; wrapping a
+CLI the agent can already run just adds a layer that can go out of date. MCP
+earns its place only where the client has no shell.
 
 ### Claude Code hooks
 The files live in `hooks/claude/`. Record repo `HEAD` at session start, then on
