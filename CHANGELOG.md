@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.5](https://github.com/rambaarde/create-ai-memory/compare/v0.14.4...v0.14.5) (2026-08-31)
+
+
+### Bug Fixes
+
+* **ai-mem:** relink orphaned logs, and answer "why not just CLAUDE.md?" ([bfc7fcf](https://github.com/rambaarde/create-ai-memory/commit/bfc7fcf277af5e3fe486c45919e9eea5f69661a5))
+* **ai-mem:** relink orphaned logs, and answer "why not just CLAUDE.md?" ([b359751](https://github.com/rambaarde/create-ai-memory/commit/b359751d29a76b896d30442b0a2a42803c8feefa))
+* **ai-mem:** relink orphaned logs, and answer "why not just CLAUDE.md?" ([a7ac41f](https://github.com/rambaarde/create-ai-memory/commit/a7ac41fda5a88d72d78a02328bdfe073c29e9604))
+
 ## [0.14.4](https://github.com/rambaarde/create-ai-memory/compare/v0.14.3...v0.14.4) (2026-08-31)
 
 
