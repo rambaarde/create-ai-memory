@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.13.0](https://github.com/rambaarde/create-ai-memory/compare/v0.12.0...v0.13.0) (2026-08-31)
+
+
+### Features
+
+* **ai-mem:** declare a type on every note, per Open Knowledge Format ([4c7a5a1](https://github.com/rambaarde/create-ai-memory/commit/4c7a5a17fe29db53f9930c16b84241d545c5ab53))
+* **ai-mem:** declare a type on every note, per Open Knowledge Format ([75ceede](https://github.com/rambaarde/create-ai-memory/commit/75ceedec4fd0d8e34641cf98a215a0b12b721f97))
+* **ai-mem:** list lesson slugs in the launch prompt ([5fe4f2e](https://github.com/rambaarde/create-ai-memory/commit/5fe4f2e44ef7bd3802209cda8c31cb20cd336754))
+* **ai-mem:** list lesson slugs in the launch prompt ([e634d1a](https://github.com/rambaarde/create-ai-memory/commit/e634d1af7cc5797c80200cccd0ed27e9eacffe5d))
+* **ai-mem:** list lesson slugs in the launch prompt ([f276b87](https://github.com/rambaarde/create-ai-memory/commit/f276b873afd95e91221b0e399d455e17cacbea9c))
+* **ai-mem:** OKF type field, mirrored-note dedup, benchmarks and a search diagram ([8f7d0c9](https://github.com/rambaarde/create-ai-memory/commit/8f7d0c964e24b0863a4441497ac6cefce1fa8e7e))
+
+
+### Bug Fixes
+
+* **ai-mem:** name private helpers so agent shell snapshots keep them ([69632bc](https://github.com/rambaarde/create-ai-memory/commit/69632bcccf7fde361316e77c4bc84f09e86900f4))
+* **ai-mem:** name private helpers so agent shell snapshots keep them ([3708e65](https://github.com/rambaarde/create-ai-memory/commit/3708e65c5625e5de2d6000c938c136429c5be228))
+* **ai-mem:** name private helpers so agent shell snapshots keep them ([85393df](https://github.com/rambaarde/create-ai-memory/commit/85393df5a1bd0c74fd3b83ed588d14a682a1619f))
+
+
+### Performance Improvements
+
+* **ai-mem:** inject a mirrored note's differences, not the whole note ([de7fed9](https://github.com/rambaarde/create-ai-memory/commit/de7fed9b79debb7a7a28d9c940385622b91e1131))
+* **ai-mem:** inject a mirrored note's differences, not the whole note ([00036eb](https://github.com/rambaarde/create-ai-memory/commit/00036eba9f2539a0b1b32cf26728452c79c08c30))
+
 ## [0.12.0](https://github.com/rambaarde/create-ai-memory/compare/v0.11.3...v0.12.0) (2026-08-30)
 
 
