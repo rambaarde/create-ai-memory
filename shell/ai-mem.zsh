@@ -317,7 +317,22 @@ __ai_mem_ensure_vault() {
     # in the file alone. This runs on session prep, so an existing install
     # heals on its next launch rather than waiting for someone to think to run
     # ai-mem-lint --fix.
+    # The `project:` line must be a [[wikilink]] or every log created from this
+    # template is orphaned from its project note -- which is what the graph
+    # edges and ai-mem-lint both key on. A vault whose template predates that
+    # produced disconnected logs silently, one per session.
     local tmpl="$AI_MEM_SESSION_DIR/_session_template.md"
+    if [[ -f "$tmpl" ]] && grep -qm1 '^project: {{project_name}}$' "$tmpl"; then
+        __ai_mem_guard "$tmpl" || return 1
+        local ptmp="$tmpl.aimem-upgrade"
+        sed 's|^project: {{project_name}}$|project: "[[{{project_name}}]]"|' "$tmpl" > "$ptmp" && mv "$ptmp" "$tmpl"
+    fi
+    if [[ -f "$tmpl" ]] && ! grep -qm1 '^previous:' "$tmpl"; then
+        __ai_mem_guard "$tmpl" || return 1
+        local vtmp="$tmpl.aimem-upgrade"
+        awk '/^project:/ { print; print "previous: \"{{previous_session_link}}\""; next } { print }' "$tmpl" > "$vtmp" && mv "$vtmp" "$tmpl"
+    fi
+
     if [[ -f "$tmpl" ]] && ! grep -qm1 '^type: ' "$tmpl"; then
         __ai_mem_guard "$tmpl" || return 1
         local tmp="$tmpl.aimem-upgrade"
@@ -908,6 +923,28 @@ ai-mem-lint() {
             print -r -- "the session log template has no \`type:\` field, so every new log will lack one. Fix with: ai-mem-lint --fix"
             (( issues++ ))
         fi
+    fi
+
+    # Logs already written from a stale template stay orphaned until repaired.
+    # Reporting them without offering the fix leaves the user to hand-edit
+    # hundreds of files, which nobody does.
+    local -a orphan_files
+    while IFS= read -r -d '' f; do
+        [[ "${f:t}" == "_session_template.md" ]] && continue
+        grep -qm1 -E '^project:.*\[\[.*\]\]' "$f" 2>/dev/null && continue
+        grep -qm1 -E '^project: .+' "$f" 2>/dev/null && orphan_files+=("$f")
+    done < <(find "$AI_MEM_SESSION_DIR" -maxdepth 2 -name "*.md" -print0 2>/dev/null)
+
+    if (( $#orphan_files && fix )); then
+        local pname otmp
+        for f in $orphan_files; do
+            __ai_mem_guard "$f" >/dev/null || continue
+            pname="$(grep -m1 '^project: ' "$f" | sed 's/^project: *//; s/^"//; s/"$//')"
+            [[ -n "$pname" ]] || continue
+            otmp="$f.aimem-link"
+            sed "s|^project: .*$|project: \"[[${pname}]]\"|" "$f" > "$otmp" && mv "$otmp" "$f"
+        done
+        print -r -- "linked $#orphan_files session log(s) back to their project note"
     fi
 
     if (( $#untyped_files )); then
