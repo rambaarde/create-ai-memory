@@ -193,6 +193,7 @@ off last time.
 - [Install](#install)
 - [Commands](#commands)
 - [How search works](#how-search-works)
+- [What it costs](#what-it-costs-and-what-it-cannot-do)
 
 </td>
 <td valign="top" width="33%">
@@ -263,7 +264,8 @@ AI_MEM_SEARCH_LIMIT=999999 ai-mem-search postgres | wc -c
 
 | | |
 |---|---|
-| Search, common term, 238 hits | **0.07 s** |
+| Search, common term, 501-note vault | **0.07 s** |
+| Search at 2,000 / 10,000 notes | 1.3 s / 7.2 s — linear, see [limits](#what-it-costs-and-what-it-cannot-do) |
 | Shell startup cost of the module | **< 0.01 s** |
 | Recency sort, v0.11.0 regression fix | 25.4 s → **0.54 s** (47×) |
 
@@ -470,6 +472,84 @@ frontmatter, a missing source, a `mirror_of` containing a path separator, or
 a diff that would leave nothing all inject the note in full. Injecting a note
 twice costs tokens; dropping one costs the agent context it was promised, and
 those are not the same kind of mistake.
+
+### What it costs, and what it cannot do
+
+Everything below is measured, not estimated. Reproduce any row with the
+command beside it.
+
+**Matching is substring, case-insensitive, literal.** Not word matching, not
+stemming, not fuzzy. On a real 501-note vault:
+
+| query | matches | why |
+|---|---|---|
+| `git` | 765 | substring — also hits `github`, `gitignore` |
+| `github` | 255 | a subset of the above |
+| `Postgres` / `POSTGRES` / `postgre` | 93 each | case is ignored; a prefix still matches |
+| `.env` | 131 | `-F` — the dot matches a literal dot |
+| `env` | 307 | more, because `.env` is a narrower string |
+| `postgress` *(typo)* | **0** | **no fuzzy matching. A misspelling finds nothing.** |
+
+That last row is the honest limit. There is no spell correction and no synonym
+expansion, so the strategy has to be *start broad and narrow* — search
+`postgres` before `postgres connection pool timeout`.
+
+**Token cost is bounded, whatever the result size.** This is the property that
+matters when an agent is the reader:
+
+| query | matches | tokens returned |
+|---|---|---|
+| a term with no hits | 0 | **~23** |
+| `idempotency` | 14 | ~619 |
+| `prisma` | 240 | ~1,752 |
+| `the` | 10,198 | **~1,805** |
+
+Ten thousand matches costs three percent more than two hundred. The cap is
+what makes the tool safe to hand an agent — an unbounded `grep` of a common
+term ran ~29k tokens and was silently truncated by the host, leaving the model
+unable to tell "withheld" from "absent".
+
+**Speed is linear in vault size, and dominated by how many lines match.**
+
+| vault | rare term (scan only) | common term (many matches) |
+|---|---|---|
+| 501 notes *(a real vault)* | — | **0.07 s** |
+| 500 notes, dense synthetic | 0.12 s | 0.34 s |
+| 2,000 | 0.35 s | 1.29 s |
+| 10,000 | 1.74 s | 7.20 s |
+| 50,000 | — | tens of seconds |
+
+```sh
+time ai-mem-search postgres >/dev/null
+```
+
+Comfortable to a few thousand notes, which is years of daily logs. Past
+roughly ten thousand a common term becomes noticeable, and the fix is to scope
+it — `ai-mem-search <term> <project>` searches one project's logs instead of
+the whole vault. If you ever outgrow that, the honest answer is that this tool
+is the wrong shape for you and you want a real index.
+
+### Is it used while you code, or only at launch?
+
+Worth being blunt, because it is the question that decides whether this is
+useful to you.
+
+**Pushed automatically, once, at launch** — `claude-start` and friends inject
+your profile, your standards, the project note's path, a digest of the last
+session, and the list of lesson topics. About **4,300 tokens**.
+
+**Pulled on demand, after that** — nothing re-injects. Mid-session, the vault
+reaches the agent only when it runs `ai-mem-search` itself, which it does
+because the launch prompt tells it to before solving a problem.
+
+So it is a reference library the agent is instructed to consult, not a memory
+it thinks with continuously. Two consequences worth knowing up front:
+
+- Launch a bare `claude` instead of `claude-start` and you get **no vault
+  context at all**. There is no daemon and no hook backstopping it.
+- Whether it helps mid-build comes down to whether the agent actually
+  searches. The lesson index exists precisely because an agent cannot search
+  for knowledge it does not know it has.
 
 ### Lessons are indexed, not injected
 
