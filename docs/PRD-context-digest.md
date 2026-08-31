@@ -8,11 +8,11 @@
 
 The design below (sections 1–4) originally called for a new machine-managed file, `_session_logs/<project>/.digest.md`, written by `session-summary.sh` on every Stop. That was rejected: **no new files in the vault, period** — only the structure that already exists.
 
-**What shipped instead:** `_ai_mem_context_prompt()` extracts the four `# Session Outcome` bullets directly from the previous session log **at read time**, on every launch, instead of pre-generating and persisting them. No write-side change at all — `hooks/claude/session-summary.sh` is untouched, back to its original form.
+**What shipped instead:** `__ai_mem_context_prompt()` extracts the four `# Session Outcome` bullets directly from the previous session log **at read time**, on every launch, instead of pre-generating and persisting them. No write-side change at all — `hooks/claude/session-summary.sh` is untouched, back to its original form.
 
 This is simpler than the file-based version, not just more restrictive: no idempotent-rewrite logic to maintain, no "is the digest stale relative to the log" question, no second file to keep in sync. Extraction is a couple of `grep`/`sed` calls against a small file — cheap enough to redo on every launch rather than caching the result anywhere.
 
-One real bug surfaced by building it this way: a brand-new, never-edited session log already matches the bullet regex — its bracket placeholders (`[What changed or was decided]`, etc.) would otherwise get inlined as if they were real content. `_ai_mem_session_field()` filters out any value that's entirely wrapped in `[...]` before returning it, so an untouched template correctly falls back to the old path-pointer behavior instead of surfacing placeholder text.
+One real bug surfaced by building it this way: a brand-new, never-edited session log already matches the bullet regex — its bracket placeholders (`[What changed or was decided]`, etc.) would otherwise get inlined as if they were real content. `__ai_mem_session_field()` filters out any value that's entirely wrapped in `[...]` before returning it, so an untouched template correctly falls back to the old path-pointer behavior instead of surfacing placeholder text.
 
 Everything below — the problem statement, goals, fallback chain, escape hatch — still describes the shipped behavior accurately. Only "1. Digest file" and "2. Write path" in the Proposed design section describe something that was built, then reverted; kept here for the record rather than deleted.
 
@@ -22,7 +22,7 @@ An earlier draft of this PRD assumed `ai-mem.zsh` inlines the full text of the l
 
 ## Problem
 
-`_ai_mem_context_prompt()` (`shell/ai-mem.zsh:185`) already keeps `memory_prompt` lean: it inlines full text only for `_Global_Profile.md` and `_Standards.md`. The previous session log is passed as a **path**, with an instruction: *"Latest prior session log: `<path>` ... Read the latest prior session log for continuity before acting. Do not load the full session history unless the user asks for it."*
+`__ai_mem_context_prompt()` (`shell/ai-mem.zsh:185`) already keeps `memory_prompt` lean: it inlines full text only for `_Global_Profile.md` and `_Standards.md`. The previous session log is passed as a **path**, with an instruction: *"Latest prior session log: `<path>` ... Read the latest prior session log for continuity before acting. Do not load the full session history unless the user asks for it."*
 
 This is correct in spirit (small prompt, on-demand deep read) but has a real gap: nothing guarantees the agent actually calls `Read()` on that path. It's an instruction sitting in a wall of text, not a forced action. If the model doesn't act on it, "continuity" silently doesn't happen — which matches the "sometimes it forgets" complaint that motivated this: not a cost problem, a **compliance** problem. A path the agent might read is weaker than content the agent has already seen.
 
@@ -45,7 +45,7 @@ This is correct in spirit (small prompt, on-demand deep read) but has a real gap
 - `hooks/claude/session-start.sh`: SessionStart hook, records `git rev-parse HEAD` into `<log>.startsha` when launched via `claude-start` (i.e. `AI_MEM_ACTIVE_SESSION_LOG` is set).
 - `hooks/claude/session-summary.sh`: Stop hook, idempotently rewrites a `## Auto Session Log` block (branch, commits since `startsha`, uncommitted changes) into the active session log on every Stop. Unchanged by this PRD.
 - `vault-template/_session_logs/_session_template.md`: every session log has a fixed `# Session Outcome` section with five bolded bullets — High-Level Summary, Important Decisions, Constraints / Blockers, Next Step, Notes for Future AI — followed by the auto-appended git block.
-- `shell/ai-mem.zsh` (`_ai_mem_context_prompt`, line 185): inlines full text of Global_Profile + Standards. Project note and previous session log are injected as **paths only** — `Latest prior session log: <path>` — plus an instruction to read the log before acting.
+- `shell/ai-mem.zsh` (`__ai_mem_context_prompt`, line 185): inlines full text of Global_Profile + Standards. Project note and previous session log are injected as **paths only** — `Latest prior session log: <path>` — plus an instruction to read the log before acting.
 - `shell/adapters.zsh`: `memory_prompt` is passed as the **first user message** to claude/codex/gemini/opencode (positional prompt), or seeded into a rules file for cursor. Not a system prompt — the agent sees it as the first thing said to it.
 
 ## Proposed design (see "Second correction" above — 1 and 2 were reverted)
@@ -60,12 +60,12 @@ This is correct in spirit (small prompt, on-demand deep read) but has a real gap
 
 ### 3. Read path (shipped, adjusted)
 
-`_ai_mem_context_prompt()` extracts four bullets — Summary, Decisions, Blockers, Next — directly from `$previous_session_note` on every call, via `_ai_mem_session_field()`:
+`__ai_mem_context_prompt()` extracts four bullets — Summary, Decisions, Blockers, Next — directly from `$previous_session_note` on every call, via `__ai_mem_session_field()`:
 1. If at least one bullet is present and non-placeholder → inline all four (missing ones shown as `—`) in place of today's `Latest prior session log: <path>` line.
 2. Else (no bullets found, or the log is an untouched template) → today's exact current behavior: the path line + read-before-acting instruction. Unchanged, not removed.
 3. No prior session at all → `previous_session_label` stays `(none yet)`. Already handled, nothing to build.
 
-Each inlined value is passed through `_ai_mem_cap_field()` — a defensive 500-char cap with an explicit truncation marker, guarding against one unusually long freeform bullet.
+Each inlined value is passed through `__ai_mem_cap_field()` — a defensive 500-char cap with an explicit truncation marker, guarding against one unusually long freeform bullet.
 
 Every branch here either inlines guaranteed-seen content or falls back to the exact behavior that ships today — there is no new "silent" state to introduce.
 

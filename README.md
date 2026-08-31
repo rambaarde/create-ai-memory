@@ -377,7 +377,7 @@ Launchers are not hardcoded. Each agent is one small adapter, and the
 1. Define the adapter in `shell/adapters.zsh`. It receives `$1` memory prompt,
    `$2` mode block, and `$3` onward extra args:
    ```zsh
-   _ai_adapter_aider() {
+   __ai_adapter_aider() {
        local memory_prompt="$1"
        aider --message "$memory_prompt"
    }
@@ -387,6 +387,13 @@ Launchers are not hardcoded. Each agent is one small adapter, and the
    export AI_MEM_AGENTS="claude codex gemini cursor opencode aider"
    ```
 3. `aider-start` now exists. No core edits.
+
+Name private helpers with **two** leading underscores (`__ai_adapter_aider`,
+not `_ai_adapter_aider`). Claude Code replays a snapshot of your interactive
+shell for every command it runs, and that snapshot drops single-underscore
+function names -- the filter targets zsh's completion functions, but it takes
+private helpers with it. A one-underscore helper simply will not exist inside
+an agent-run command.
 
 ## Integrations
 
