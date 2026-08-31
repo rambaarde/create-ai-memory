@@ -776,6 +776,33 @@ AI_MEM_ROOT="$OKFVAULT" zsh -c '
 is "$(head -1 "$BARE")" "---" "--fix opens a frontmatter block when a note had none"
 has "$(<"$BARE")" "just a body" "--fix keeps the body of a note that had no frontmatter"
 
+# An existing install keeps its own copy of the template forever, so fixing
+# the shipped one does not reach anybody who already ran the installer. A
+# template without `type:` re-creates the entire backlog one session at a
+# time, which makes it the single most important file to repair.
+TMPL="$OKFVAULT/_session_logs/_session_template.md"
+print -rl -- "---" "date: {{date}}" "---" "# Session Outcome" > "$TMPL"
+TMPL_LINT="$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint
+' 2>&1 || true)"
+has "$TMPL_LINT" "every new log will lack one" "lint reports a template that would produce untyped logs"
+
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+has "$(<"$TMPL")" "type: ai-session-log" "--fix repairs the session log template"
+has "$(<"$TMPL")" "{{date}}"             "--fix leaves the template's placeholders intact"
+
+# The point of repairing it: a log created afterwards must carry the field.
+AFTERLOG="$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$WORK"'"
+  __ai_mem_today_session_log afterproj
+')"
+has "$(<"$AFTERLOG")" "type: ai-session-log" "a log created after the repair carries the type field"
+
 # --- mirrored notes contribute only what differs ------------------------------
 # _Standards.md ships declaring `mirror_of: _Global_Profile.md`. Injecting both
 # in full restates text the model just read: measured on a real vault, 72 of

@@ -825,6 +825,30 @@ ai-mem-lint() {
         fi
     done < <(find "$AI_MEM_PROJECT_DIR" -maxdepth 1 -name "*.md" -print0 2>/dev/null)
 
+    # The template is skipped by the loop above, and rightly -- it is not a
+    # note. But it is what every future log is copied from, so a template
+    # without `type:` quietly re-creates the whole backlog one session at a
+    # time. An existing install keeps its own copy of the template and never
+    # picks up a newer one, so fixing the shipped file is not enough.
+    local tmpl="$AI_MEM_SESSION_DIR/_session_template.md"
+    if [[ -f "$tmpl" ]] && ! grep -qm1 '^type: ' "$tmpl"; then
+        if (( fix )); then
+            __ai_mem_guard "$tmpl" >/dev/null && {
+                local ttmp="$tmpl.aimem-backfill"
+                if [[ "$(head -1 "$tmpl")" == "---" ]]; then
+                    { head -1 "$tmpl"; print -r -- "type: ai-session-log"; tail -n +2 "$tmpl"; } > "$ttmp"
+                else
+                    { print -rl -- "---" "type: ai-session-log" "---" ""; cat "$tmpl"; } > "$ttmp"
+                fi
+                mv "$ttmp" "$tmpl"
+                print -r -- "added \`type:\` to the session log template, so new logs carry it"
+            }
+        else
+            print -r -- "the session log template has no \`type:\` field, so every new log will lack one. Fix with: ai-mem-lint --fix"
+            (( issues++ ))
+        fi
+    fi
+
     if (( $#untyped_files )); then
         if (( fix )); then
             # Written by hand rather than with `sed -i`, whose in-place flag
