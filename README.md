@@ -355,7 +355,7 @@ because the alternative gave a wrong answer on a real vault:
 |---|---|
 | **Case-insensitive** | A false empty is the worst answer a memory tool can give. `precompact` found 0 case-sensitively and 3 with `-i`; `Postgres` 56 vs 90. |
 | **Literal, not regex** | The caller is usually an agent passing free text, where a stray `.` or `(` must match itself. |
-| **Newest first** | Sorted on the timestamp in the filename. For a time series the newest hit is usually the right one, so no ranking is needed. |
+| **Lessons first, then newest** | Session logs outnumber lessons ~4:1 and are always newer, so recency alone buried them — searching `snapshot` returned 25 logs and none of the 3 lessons answering it. A lesson now outranks newer chatter. |
 | **Bounded output** | Unbounded, a common term ran ~29k tokens and was silently truncated by the host — leaving the agent unable to tell *hidden* from *absent*. |
 | **One line per file** | Until the budget binds. Spends it on distinct notes rather than the chattiest one. |
 | **Compact lines** | Vault root printed once and stripped from every path; lines over 200 chars clamped. |
@@ -377,8 +377,13 @@ stemming, not fuzzy:
 | `env` | 307 | more — `.env` is narrower |
 | `postgress` *(typo)* | **0** | **no fuzzy matching** |
 
-That last row is the limit: a misspelling finds nothing. Search broad, then
-narrow — `postgres` before `postgres connection pool timeout`.
+That last row is the limit: a misspelling finds nothing.
+
+**Search one distinctive word, not a sentence.** Matching is literal
+substring, so the whole error line `command not found: sed` finds **nothing**
+while `command not found` finds it — and a bare tool name like `sed` returns
+1,012 irrelevant lines. Pick the most unusual word in the symptom and try two
+or three separately.
 
 **Token cost is bounded and flat:**
 

@@ -458,7 +458,8 @@ Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
-When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down. Search the error text, the tool name, and the symptom separately; one of the three usually hits.
+When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down; lessons are ranked above session logs in the results, so a hit under \`_lessons/\` is the recorded fix.
+Search ONE distinctive word, not a sentence. Matching is literal substring, so a whole error line ('command not found: sed') finds nothing while 'command not found' finds it, and a bare tool name ('sed', 'git') returns hundreds of irrelevant lines. Pick the most unusual word in the symptom and try two or three of them separately.
 If the user asks to see, open or browse their memory rather than search it, run \`ai-mem-serve\` -- it opens the vault as a graph in their browser, and is safe to run again if it is already up.
 When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <problem> <solution>\` -- e.g. \`ai-lesson rate-limiting "a fixed-window limiter kept losing bursts of legitimate traffic" "switched to a token bucket, which absorbs bursts correctly"\`. It appends a dated Problem/Solution entry to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
 EOF
@@ -956,14 +957,28 @@ ai-mem-search() {
     # -- while the grep that actually searched it took 0.16s. Measuring grep
     # alone said this command was fast; measuring the command said otherwise.
     # Interval syntax like {4} is avoided so this works on a stock BSD awk.
+    # Lessons outrank everything else, then newest-first within each group.
+    #
+    # Recency alone was wrong for the case that matters most: hitting a blocker
+    # you have hit before. Session logs outnumber lessons roughly four to one
+    # and are always newer, so they swept the result set -- searching
+    # "snapshot" on a real vault returned 25 session logs and none of the
+    # THREE lessons that answer it exactly. The durable answer was in the
+    # vault and unreachable.
+    #
+    # Sort key is rank + timestamp: "0" for _lessons/, "1" for everything
+    # else, so a lesson with an old date still beats today's chatter.
     local sorted
-    sorted="$(print -r -- "$raw" | awk '
+    sorted="$(print -r -- "$raw" | awk -v root="$search_root/" '
         {
             ts = "0000-00-00_00-00-00"
             if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
                 ts = substr($0, RSTART, RLENGTH)
-            print ts "|" $0
-        }' | sort -r | cut -d'|' -f2-)"
+            rel = $0
+            sub(root, "", rel)
+            rank = (rel ~ /^_lessons\//) ? "1" : "0"
+            print rank "|" ts "|" $0
+        }' | sort -r | cut -d'|' -f3-)"
 
     # Bound the output. The consumer is normally an agent with a finite
     # context window, and an unbounded dump is actively harmful there in a
