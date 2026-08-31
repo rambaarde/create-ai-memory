@@ -35,9 +35,9 @@ export AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory"
 # Register a fake agent + a fake skill BEFORE sourcing so the launcher loop and
 # the picker pick them up. The adapter just records the prompt it was handed.
 CAPTURE="$(mktemp)"
-_ai_adapter_faketest() { print -r -- "$1" > "$CAPTURE"; }
+__ai_adapter_faketest() { print -r -- "$1" > "$CAPTURE"; }
 faketest() { : }            # stub CLI so the missing-agent guard lets faketest through
-_ai_adapter_ghost() { : }   # adapter exists but there is no `ghost` CLI on PATH
+__ai_adapter_ghost() { : }   # adapter exists but there is no `ghost` CLI on PATH
 export AI_MEM_AGENTS="claude codex gemini cursor opencode faketest ghost"
 typeset -gA AI_MEM_SKILLS
 AI_MEM_SKILLS[terse]='Use terse output this session?::Respond tersely; drop filler.'
@@ -53,14 +53,14 @@ git -C "$WORK" config user.name  tester
 cd "$WORK"
 
 # --- 1. path guard ------------------------------------------------------------
-succeeds '_ai_mem_guard "$AI_MEM_ROOT/_projects/x.md"' "guard allows a path inside the vault"
-fails    '_ai_mem_guard /etc/passwd'                    "guard rejects a path outside the vault"
+succeeds '__ai_mem_guard "$AI_MEM_ROOT/_projects/x.md"' "guard allows a path inside the vault"
+fails    '__ai_mem_guard /etc/passwd'                    "guard rejects a path outside the vault"
 
 # --- 2. project resolution = git repo basename --------------------------------
-is "$(_ai_mem_resolve_project)" "demoproj" "project resolves to the git repo dir name"
+is "$(__ai_mem_resolve_project)" "demoproj" "project resolves to the git repo dir name"
 
 # --- 3. session prep creates notes and exports state --------------------------
-resolved="$(_ai_mem_prepare_session)"
+resolved="$(__ai_mem_prepare_session)"
 project="${resolved%%|*}"; rest="${resolved#*|}"
 project_note="${rest%%|*}"; rest="${rest#*|}"
 prev_log="${rest%%|*}"; session_note="${rest##*|}"
@@ -73,12 +73,12 @@ has "$(<"$project_note")" "demoproj"              "project note has the name sub
 # --- 3b. session log frontmatter links to the project note and prior session --
 # A separate project name so this never perturbs demoproj's own session chain,
 # which later sections rely on being exactly what section 3 created.
-LT1="$(_ai_mem_prepare_session linktest)"
+LT1="$(__ai_mem_prepare_session linktest)"
 LT1_NOTE="${LT1##*|}"
 has "$(<"$LT1_NOTE")" 'project: "[[linktest]]"' "session frontmatter links to the project note"
 has "$(<"$LT1_NOTE")" 'previous: ""'            "first session has no previous link"
 
-LT2="$(_ai_mem_prepare_session linktest)"
+LT2="$(__ai_mem_prepare_session linktest)"
 LT2_NOTE="${LT2##*|}"
 LT1_BASENAME="${LT1_NOTE:t:r}"
 has "$(<"$LT2_NOTE")" "previous: \"[[${LT1_BASENAME}]]\"" "second session links back to the first"
@@ -86,14 +86,14 @@ has "$(<"$LT2_NOTE")" "previous: \"[[${LT1_BASENAME}]]\"" "second session links 
 # Persistence beyond 2 sessions: a third session must chain to the second,
 # not fall back to the first or drop the link entirely.
 sleep 1.1  # filenames are second-granularity; guarantee a distinct timestamp
-LT3="$(_ai_mem_prepare_session linktest)"
+LT3="$(__ai_mem_prepare_session linktest)"
 LT3_NOTE="${LT3##*|}"
 LT2_BASENAME="${LT2_NOTE:t:r}"
 has "$(<"$LT3_NOTE")" "previous: \"[[${LT2_BASENAME}]]\"" "third session links back to the second, not the first"
 
 # A brand-new, different project gets the same treatment automatically, and
 # its chain starts fresh -- it must not pick up linktest's history.
-OTHERPROJ="$(_ai_mem_prepare_session othernewproj)"
+OTHERPROJ="$(__ai_mem_prepare_session othernewproj)"
 OTHERPROJ_NOTE="${OTHERPROJ##*|}"
 has "$(<"$OTHERPROJ_NOTE")" 'project: "[[othernewproj]]"' "a brand-new project also gets a correct project wikilink"
 has "$(<"$OTHERPROJ_NOTE")" 'previous: ""'                 "a brand-new project's first session is isolated from another project's chain"
@@ -125,11 +125,11 @@ date: 2026-08-20
 * **Next Step:** ship it
 EOF
 
-inline_ctx="$(_ai_mem_context_prompt "$project_note" "$PREVLOG" "$session_note")"
+inline_ctx="$(__ai_mem_context_prompt "$project_note" "$PREVLOG" "$session_note")"
 has   "$inline_ctx" "used option B"                                    "prior session bullets are extracted and inlined directly from the log"
 hasnt "$inline_ctx" "Read the latest prior session log for continuity" "no read-instruction fallback text when bullets are found"
 
-nodigest_ctx="$(AI_MEM_NO_DIGEST=1 _ai_mem_context_prompt "$project_note" "$PREVLOG" "$session_note")"
+nodigest_ctx="$(AI_MEM_NO_DIGEST=1 __ai_mem_context_prompt "$project_note" "$PREVLOG" "$session_note")"
 hasnt "$nodigest_ctx" "used option B"                                    "AI_MEM_NO_DIGEST skips inlining even when bullets exist"
 has   "$nodigest_ctx" "Read the latest prior session log for continuity" "AI_MEM_NO_DIGEST falls back to the read instruction"
 
@@ -143,7 +143,7 @@ cat > "$UNFILLEDLOG" <<'EOF'
 * **Constraints / Blockers:** [What is still limiting progress]
 * **Next Step:** [Most important follow-up]
 EOF
-unfilled_ctx="$(_ai_mem_context_prompt "$project_note" "$UNFILLEDLOG" "$session_note")"
+unfilled_ctx="$(__ai_mem_context_prompt "$project_note" "$UNFILLEDLOG" "$session_note")"
 has   "$unfilled_ctx" "Read the latest prior session log for continuity" "an untouched template's bracket placeholders fall back to the read instruction"
 hasnt "$unfilled_ctx" "What changed or was decided"                     "bracket placeholder text is never inlined as if it were real content"
 # --- 5. commit-ready token is written and matches the shell -------------------
@@ -153,12 +153,12 @@ is "$(sed -n 1p "$token_file")" "${AI_MEM_CONTEXT_TOKEN:-}" "token file matches 
 
 # --- 6. config-driven skill picker -------------------------------------------
 AI_MEM_SKILL_ORDER=()
-is "$(_ai_session_modes_pick </dev/null)" "" "picker is empty when no skills are registered"
+is "$(__ai_session_modes_pick </dev/null)" "" "picker is empty when no skills are registered"
 AI_MEM_SKILL_ORDER=(terse)
-picked="$(printf 'y\n' | _ai_session_modes_pick)"
+picked="$(printf 'y\n' | __ai_session_modes_pick)"
 is "$picked" "terse"                                            "picker returns a skill answered yes"
-is "$(printf 'n\n' | _ai_session_modes_pick)" ""                "picker drops a skill answered no"
-has "$(_ai_session_modes_instructions terse)" "Respond tersely" "instructions inject the chosen skill's block"
+is "$(printf 'n\n' | __ai_session_modes_pick)" ""                "picker drops a skill answered no"
+has "$(__ai_session_modes_instructions terse)" "Respond tersely" "instructions inject the chosen skill's block"
 
 # --- 7. launcher generation ---------------------------------------------------
 for a in claude codex gemini cursor opencode faketest; do
@@ -188,21 +188,21 @@ STALEDIR="$(mktemp -d)"
 cp "$REPO_ROOT/shell/ai-mem.zsh" "$REPO_ROOT/shell/adapters.zsh" "$STALEDIR/"
 STALE_FRESH_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" zsh -c "
   source '$STALEDIR/ai-mem.zsh'
-  _ai_session_start bogus </dev/null
+  __ai_session_start bogus </dev/null
 " 2>&1)"
 hasnt "$STALE_FRESH_OUT" "older copy" "no stale warning when the loaded module matches the file on disk"
 
 STALE_CHANGED_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" zsh -c "
   source '$STALEDIR/ai-mem.zsh'
   printf '\n# edited after this shell sourced it\n' >> '$STALEDIR/ai-mem.zsh'
-  _ai_session_start bogus </dev/null
+  __ai_session_start bogus </dev/null
 " 2>&1)"
 has "$STALE_CHANGED_OUT" "older copy"      "warns when the module changed after this shell sourced it"
 has "$STALE_CHANGED_OUT" "source ~/.zshrc" "the stale warning names the concrete fix"
 rm -rf "$STALEDIR"
 
 # --- 8. adapter dispatch: unknown agent errors, known agent gets the prompt ---
-fails '_ai_session_start bogus </dev/null' "dispatch fails for an agent with no adapter"
+fails '__ai_session_start bogus </dev/null' "dispatch fails for an agent with no adapter"
 faketest-start </dev/null >/dev/null 2>&1
 has "$(<"$CAPTURE")" "Read these notes before doing anything else:" "adapter receives the assembled memory prompt"
 has "$(<"$CAPTURE")" "demoproj"                                     "assembled prompt carries project context"
@@ -217,7 +217,7 @@ is "$ghost_after" "$ghost_before" "missing agent CLI creates no stray session lo
 
 # --- 9. ai-note appends under Live Notes -------------------------------------
 ai-note "wired the payment webhook" >/dev/null
-today_log="$(_ai_mem_today_session_log demoproj)"
+today_log="$(__ai_mem_today_session_log demoproj)"
 has "$(<"$today_log")" "### Live Notes"           "ai-note creates the Live Notes section"
 has "$(<"$today_log")" "wired the payment webhook" "ai-note appends the note text"
 
@@ -263,10 +263,10 @@ CURSOR_HOME="$(mktemp -d)"; _OLDHOME="$HOME"; export HOME="$CURSOR_HOME"
 open()   { : ; }   # stub `open -a Cursor`
 cursor() { : ; }   # stub the cursor CLI if present
 CRULE="$HOME/.cursor/rules/_ai-session.mdc"
-_ai_adapter_cursor "mem" "SESSION SKILL BLOCK" </dev/null
+__ai_adapter_cursor "mem" "SESSION SKILL BLOCK" </dev/null
 exists "$CRULE"                                "cursor adapter writes the managed rule file"
 has "$(<"$CRULE")" "SESSION SKILL BLOCK"       "cursor rule carries the session skill block"
-_ai_adapter_cursor "mem" "" </dev/null
+__ai_adapter_cursor "mem" "" </dev/null
 [[ ! -e "$CRULE" ]] && ok "cursor adapter clears the rule when no skills are chosen" \
                     || nok "cursor adapter clears the rule when no skills are chosen"
 unfunction open cursor 2>/dev/null
@@ -541,6 +541,32 @@ PERF_ELAPSED=$(( $(date +%s) - PERF_START ))
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
+
+# --- private helpers must survive a Claude Code shell snapshot -----------------
+# Claude Code snapshots the interactive shell and replays it for every
+# agent-run command, dropping every function whose name starts with a single
+# underscore (its filter targets zsh's ~1000 `_git`-style completion
+# functions). A helper named _ai_mem_x is therefore simply absent in every
+# agent shell, and its public caller fails silently rather than loudly.
+# Two-underscore names are kept, so assert the naming rather than trusting it.
+SINGLE_US_DEFS="$(grep -rhoE '^_[a-zA-Z][a-zA-Z0-9_]*\(\)' "$REPO_ROOT/shell/" || true)"
+is "$SINGLE_US_DEFS" "" "no shell/ helper is defined with a single leading underscore (a snapshot would drop it)"
+
+# The guard must convert that absence into a loud failure, because the natural
+# behavior is a lie: HEAD does not move, so the old code printed
+# "nothing to commit" and exited 0 while backing up nothing.
+GUARD_OUT="$(AI_MEM_ROOT="$NOTEVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  unfunction __ai_mem_vault_backup
+  ai-mem-vault-backup
+' 2>&1 || true)"
+has "$GUARD_OUT" "is not defined" "ai-mem-vault-backup fails loudly when its helper was dropped from the shell"
+hasnt "$GUARD_OUT" "nothing to commit" "ai-mem-vault-backup does not report a clean tree when it could not run at all"
+fails 'AI_MEM_ROOT="'"$NOTEVAULT"'" zsh -c "
+  source \"'"$REPO_ROOT"'/shell/ai-mem.zsh\"
+  unfunction __ai_mem_vault_backup
+  ai-mem-vault-backup
+"' "ai-mem-vault-backup exits non-zero when its helper was dropped"
 
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
