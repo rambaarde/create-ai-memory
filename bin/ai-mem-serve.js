@@ -82,10 +82,45 @@ function frontmatter(text) {
   return out;
 }
 
-/** First H1, else the filename -- what a human would call this note. */
-function titleOf(text, path) {
-  const h1 = text.match(/^#\s+(.+)$/m);
-  return (h1 && h1[1].trim()) || basename(path, '.md');
+/** The note's first H1, or null. */
+function h1Of(text) {
+  const m = text.match(/^#\s+(.+)$/m);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * What to call a note on the graph.
+ *
+ * The obvious answer -- its first H1 -- is wrong here, because notes are
+ * created from templates and inherit the template's heading. On a real vault
+ * that made 354 notes read "Session Outcome" and 34 read "Project Snapshot":
+ * every project and every log sharing two labels between them, which is worse
+ * than no labels at all.
+ *
+ * So an H1 is only a title if it is *this note's* H1. One shared by several
+ * notes is boilerplate by definition, and the rule needs no list of known
+ * template headings to maintain -- it corrects itself for any template,
+ * including ones a user writes.
+ *
+ * @param {string} text      the note
+ * @param {string} path      its path
+ * @param {object} fm        parsed frontmatter
+ * @param {Map} h1Counts     how many notes share each H1
+ */
+function titleOf(text, path, fm, h1Counts) {
+  if (fm.title) return fm.title;
+  if (fm.project_name) return fm.project_name;
+
+  const h1 = h1Of(text);
+  if (h1 && h1Counts.get(h1) === 1) return h1;
+
+  // Fall back to the filename, which is always specific. A session log's name
+  // is <project>-<date>_<time>, and the project is already obvious from the
+  // node it is attached to -- so show the moment, which is the part that
+  // distinguishes it from its forty siblings.
+  const name = basename(path, '.md');
+  const stamp = name.match(/(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-\d{2}$/);
+  return stamp ? stamp[1] + ' ' + stamp[2] + ':' + stamp[3] : name;
 }
 
 const LINK_RE = /\[\[([^\]|#]+)/g;
@@ -103,6 +138,11 @@ function buildGraph() {
   const nodes = [];
   const byBasename = new Map();
 
+  // Read once, keep the text: the vault is a few megabytes of markdown, and
+  // reading every file twice to count headings first would double the work
+  // for no reason.
+  const read = [];
+  const h1Counts = new Map();
   for (const f of files) {
     let text;
     try {
@@ -110,10 +150,16 @@ function buildGraph() {
     } catch {
       continue;
     }
+    read.push([f, text]);
+    const h = h1Of(text);
+    if (h) h1Counts.set(h, (h1Counts.get(h) || 0) + 1);
+  }
+
+  for (const [f, text] of read) {
     const fm = frontmatter(text);
     const node = {
       id: relative(VAULT, f),
-      title: fm.title || titleOf(text, f),
+      title: titleOf(text, f, fm, h1Counts),
       type: fm.type || 'untyped',
       tags: Array.isArray(fm.tags) ? fm.tags : fm.tags ? [fm.tags] : [],
       description: fm.description || '',
@@ -225,16 +271,38 @@ server.on('error', (err) => {
   }
   const url = 'http://127.0.0.1:' + PORT;
   http.get(url + '/api/graph', (res) => {
-    if (res.statusCode !== 200) return bail();
-    res.resume();
-    console.log('ai-mem-serve: already running');
-    console.log('  ' + url);
-    openBrowser(url);
-    process.exit(0);
-  }).on('error', bail);
+    if (res.statusCode !== 200) return bail('something else');
+    let body = '';
+    res.setEncoding('utf8');
+    res.on('data', (c) => { body += c; });
+    res.on('end', () => {
+      // Being an ai-mem-serve is not enough -- it has to be serving THIS
+      // vault. A leftover server from a test run or another vault answers
+      // /api/graph perfectly well, and attaching to it silently shows the
+      // wrong notes while reporting success. That is the failure this whole
+      // tool exists to avoid, so compare the vault it names.
+      let serving;
+      try {
+        serving = JSON.parse(body).vault;
+      } catch {
+        return bail('something else');
+      }
+      if (serving !== VAULT) {
+        console.error('ai-mem-serve: port ' + PORT + ' is already serving a different vault:');
+        console.error('  running: ' + serving);
+        console.error('  wanted:  ' + VAULT);
+        console.error('Stop that server, or pass another port: ai-mem-serve ' + (PORT + 1));
+        process.exit(1);
+      }
+      console.log('ai-mem-serve: already running');
+      console.log('  ' + url);
+      openBrowser(url);
+      process.exit(0);
+    });
+  }).on('error', () => bail('something else'));
 
-  function bail() {
-    console.error('ai-mem-serve: port ' + PORT + ' is in use by something else. Pass a different port.');
+  function bail(what) {
+    console.error('ai-mem-serve: port ' + PORT + ' is in use by ' + what + '. Pass a different port.');
     process.exit(1);
   }
 });
