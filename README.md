@@ -295,8 +295,8 @@ $ ai-mem-search prisma
 238 match(es) for 'prisma'
 paths below /Users/you/_Ai_Memory
 --
-_session_logs/stashlify/stashlify-2026-08-31_00-00-00.md:56:  - **A green deploy log is not evidence a migration ran.** Verify against `_prisma_migrations`.
-_session_logs/stashlify/stashlify-2026-08-31_00-00-00.md:55:  - **`prisma migrate deploy` cannot see `prisma/migrations/<name>.sql`.** Only `<name>/migration.sql`. It skips loose files silently -- a  [...]
+_session_logs/checkout-api/checkout-api-2026-08-31_00-00-00.md:56:  - **A green deploy log is not evidence a migration ran.** Verify against `_prisma_migrations`.
+_session_logs/checkout-api/checkout-api-2026-08-31_00-00-00.md:55:  - **`prisma migrate deploy` cannot see `prisma/migrations/<name>.sql`.** Only `<name>/migration.sql`. It skips loose files silently -- a  [...]
 ...
 --
 showing 40 of 238 (198 hidden) -- narrow with: ai-mem-search 'prisma' <project>, or raise AI_MEM_SEARCH_LIMIT
@@ -351,7 +351,7 @@ one hop out:
 a character class.)
 
 **Scoping.** A second argument restricts the search to one project's session
-logs -- `ai-mem-search postgres stashlify`. Unknown project names fail
+logs -- `ai-mem-search postgres checkout-api`. Unknown project names fail
 explicitly rather than silently searching everything.
 
 ### What it deliberately is not
