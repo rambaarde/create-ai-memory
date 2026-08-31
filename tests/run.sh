@@ -585,7 +585,7 @@ print -rl -- "---" "type: ai-lesson" "---" "# A Lesson" "seen on [[demo]]" > "$G
 print -rl -- "---" "type: ai-lesson" "---" "# Orphan" "points at [[nothing-here]]" > "$GVAULT/_lessons/orphan.md"
 
 GPORT=7793
-AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" >/dev/null 2>&1 &
+AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" --no-open >/dev/null 2>&1 &
 GPID=$!
 SERVERS+=($!)
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -937,6 +937,14 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 # builtins; adding one grep would have broken it silently.
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
+
+# --- the suite must never hijack a browser -----------------------------------
+# ai-mem-serve opens a tab by default, which is right when a person asks to
+# see their memory and wrong every other time. One spawn here predated that
+# behaviour and popped a window showing the 3-note test fixture on every run.
+# Asserted rather than remembered.
+SPAWNS_WITHOUT_NOOPEN="$(grep -n 'ai-mem-serve\.js' "$REPO_ROOT/tests/run.sh" | grep -v -- '--no-open' || true)"
+is "$SPAWNS_WITHOUT_NOOPEN" "" "no test starts ai-mem-serve without --no-open"
 
 # --- lessons outrank session logs --------------------------------------------
 # The case that matters most is hitting a blocker you have hit before, and
