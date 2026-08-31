@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.6](https://github.com/rambaarde/create-ai-memory/compare/v0.14.5...v0.14.6) (2026-08-31)
+
+
+### Bug Fixes
+
+* **viewer:** stop shipping a source file grep refuses to read ([6404ea6](https://github.com/rambaarde/create-ai-memory/commit/6404ea6d952583ee67afd61be536dfab4cef79a7))
+* **viewer:** stop shipping a source file grep refuses to read ([3b8671f](https://github.com/rambaarde/create-ai-memory/commit/3b8671ff5be01125cc68aa3eb6387b88b6470f78))
+* **viewer:** stop shipping a source file grep refuses to read ([7824855](https://github.com/rambaarde/create-ai-memory/commit/78248556dbf2b98190a9600c84b6dc6ed4669c52))
+
 ## [0.14.5](https://github.com/rambaarde/create-ai-memory/compare/v0.14.4...v0.14.5) (2026-08-31)
 
 
