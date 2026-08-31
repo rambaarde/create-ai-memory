@@ -279,6 +279,31 @@ __ai_mem_ensure_vault() {
             cp "$src" "$dst"
         fi
     done
+
+    # Seeding only fills in a MISSING file, which is right -- these are the
+    # user's notes and templates, and an upgrade must not overwrite edits they
+    # made. But that leaves an existing vault on whatever templates it had
+    # when it was created: `npm update` never touches them, and neither does
+    # install.sh. The session log template is the one where that silently
+    # matters, because every future log is copied from it -- a template with
+    # no `type:` rebuilds a backlog of non-conforming notes one session at a
+    # time, and nothing surfaces it.
+    #
+    # So repair exactly that one field, additively, and leave everything else
+    # in the file alone. This runs on session prep, so an existing install
+    # heals on its next launch rather than waiting for someone to think to run
+    # ai-mem-lint --fix.
+    local tmpl="$AI_MEM_SESSION_DIR/_session_template.md"
+    if [[ -f "$tmpl" ]] && ! grep -qm1 '^type: ' "$tmpl"; then
+        __ai_mem_guard "$tmpl" || return 1
+        local tmp="$tmpl.aimem-upgrade"
+        if [[ "$(head -1 "$tmpl")" == "---" ]]; then
+            { head -1 "$tmpl"; print -r -- "type: ai-session-log"; tail -n +2 "$tmpl"; } > "$tmp"
+        else
+            { print -rl -- "---" "type: ai-session-log" "---" ""; cat "$tmpl"; } > "$tmp"
+        fi
+        mv "$tmp" "$tmpl"
+    fi
 }
 
 __ai_mem_prepare_session() {
