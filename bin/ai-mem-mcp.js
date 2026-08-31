@@ -24,7 +24,7 @@
  */
 'use strict';
 
-const { spawnSync } = require('node:child_process');
+const { spawnSync, spawn } = require('node:child_process');
 const { realpathSync, existsSync, readFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { homedir } = require('node:os');
@@ -113,6 +113,8 @@ const INSTRUCTIONS = [
   'Write back. A session that only reads leaves nothing behind, and the next one starts cold:',
   '- add_note for what happened, decided, or broke during this session.',
   '- add_lesson for something worth recalling in a DIFFERENT project later. Not project trivia -- the transferable part.',
+  '',
+  'If they ask to see, open or browse their memory rather than search it, call open_graph.',
 ].join('\n');
 
 // Descriptions stay terse on purpose. Every schema below is re-sent on each
@@ -159,6 +161,11 @@ const TOOLS = [
     },
   },
   {
+    name: 'open_graph',
+    description: 'Open the vault as a browsable graph in the user\'s browser. Use when they ask to see, open or browse their memory.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
     name: 'add_lesson',
     description: 'Record a problem and its solution as a cross-project lesson. Use only for something that will matter in a different project.',
     inputSchema: {
@@ -191,6 +198,20 @@ function callTool(name, args = {}) {
         return { ok: false, text: 'topic, problem and solution are all required' };
       }
       return zsh(`ai-lesson ${q(args.topic)} ${q(args.problem)} ${q(args.solution)}`);
+    // Detached and unref'd: the viewer has to outlive this call, and an MCP
+    // tool that blocks until a server exits would hang the client forever.
+    case 'open_graph': {
+      const bin = join(__dirname, 'ai-mem-serve.js');
+      const port = process.env.AI_MEM_PORT || '7777';
+      try {
+        spawn(process.execPath, [bin, port], {
+          stdio: 'ignore', detached: true, env: { ...process.env, AI_MEM_ROOT: VAULT },
+        }).unref();
+      } catch (e) {
+        return { ok: false, text: 'could not start the viewer: ' + e.message };
+      }
+      return { ok: true, text: 'Opened the memory graph at http://127.0.0.1:' + port + ' (a browser tab should be opening).' };
+    }
     case 'read_note': {
       const p = insideVault(args.path || '');
       if (!p) return { ok: false, text: `refused: ${args.path} is not inside the vault` };
