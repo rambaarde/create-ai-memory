@@ -98,6 +98,30 @@ __ai_mem_vault_backup() {
 # ai-note/ai-lesson -- e.g. the update-session-log skill, which edits the
 # Session Outcome section directly and has no other reason to know this
 # function exists.
+# The graph viewer and the MCP server are Node scripts shipped beside this
+# module. They are declared as npm `bin` entries too, but `npm create` copies
+# the tool into a folder rather than installing it globally, so nothing puts
+# them on PATH -- exposing them as functions is what makes the documented
+# commands work for everyone, however they installed.
+#
+# The bundled copy wins over anything on PATH: it is guaranteed to match the
+# module the shell just sourced, which a separately-installed global may not.
+__ai_mem_node_bin() {
+    local script="$AI_MEM_HOME/../bin/$1"
+    shift
+    if [[ -f "$script" ]]; then
+        command node "$script" "$@"
+    elif command -v "${1:-}" >/dev/null 2>&1; then
+        command "$@"
+    else
+        print -r -- "$script is missing -- reinstall with: npm create ai-memory@latest" >&2
+        return 1
+    fi
+}
+
+ai-mem-serve() { __ai_mem_node_bin ai-mem-serve.js "$@" }
+ai-mem-mcp()   { __ai_mem_node_bin ai-mem-mcp.js "$@" }
+
 ai-mem-vault-backup() {
     # Fail loudly if the helper is absent. Without this the function still
     # "works": HEAD does not move, so it prints "nothing to commit" and exits
