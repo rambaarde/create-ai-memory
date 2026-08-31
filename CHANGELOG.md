@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.1](https://github.com/rambaarde/create-ai-memory/compare/v0.14.0...v0.14.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **ai-mem:** repair a stale session template on session prep ([55b2e0b](https://github.com/rambaarde/create-ai-memory/commit/55b2e0b63ee3e09c52a37a424681ce4dd799899b))
+* **ai-mem:** repair a stale session template on session prep ([c116036](https://github.com/rambaarde/create-ai-memory/commit/c11603663d7feb3dcc5b07839eb961e6099b52e6))
+* **ai-mem:** repair a stale session template on session prep ([23975d6](https://github.com/rambaarde/create-ai-memory/commit/23975d69c249c3b29b75d7150d8c4bfc15c8ff73))
+* **ai-mem:** repair the session log template, not just the logs ([32424ea](https://github.com/rambaarde/create-ai-memory/commit/32424eaa8ae55e0298934f229136dc42a9401088))
+* **ai-mem:** repair the session log template, not just the logs ([6891884](https://github.com/rambaarde/create-ai-memory/commit/68918842b2b71193c49a1667eef79ea715b5a1a8))
+* **ai-mem:** repair the session log template, not just the logs ([fbb5dd5](https://github.com/rambaarde/create-ai-memory/commit/fbb5dd5b29f53ead14e66487aceab7e4b6e74e0f))
+
 ## [0.14.0](https://github.com/rambaarde/create-ai-memory/compare/v0.13.0...v0.14.0) (2026-08-31)
 
 
