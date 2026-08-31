@@ -603,25 +603,42 @@ are sanitized placeholders.
 
 ## Open Knowledge Format
 
-The vault is close to [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)
-(OKF) — Google's open spec for portable, agent-readable knowledge — mostly by
-convergence rather than adoption. Both bet on the same thing: plain Markdown
-in a directory tree, in git, with no runtime.
+[Open Knowledge Format](https://github.com/GoogleCloudPlatform/open-knowledge-format)
+(OKF) is Google's vendor-neutral spec for portable, agent-readable knowledge.
+An OKF *bundle* is simply a directory tree of markdown files — the unit of
+distribution, shippable as a git repo, tarball, or zip, and readable by any
+agent, static file server, Obsidian, MkDocs, or graph viewer without a
+translation layer.
 
-| OKF expects | Here |
+Your vault is one. That is convergence rather than adoption: both bet on
+plain Markdown in a directory tree, in git, with no runtime.
+
+The spec is deliberately small. [It requires no file at the bundle
+root](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+— `index.md` and `log.md` are optional — and names exactly one required
+frontmatter key: *"`type` is the only always-required key; a concept carrying
+just `type` is fully conformant."*
+
+| OKF | Here |
 |---|---|
 | Markdown files in a directory hierarchy | ✅ `_projects/`, `_lessons/`, `_session_logs/`, `_proposals/` |
 | YAML frontmatter | ✅ every note |
-| **A `type` field — the only required one** | ✅ `ai-project-context`, `ai-lesson`, `ai-session-log`, `ai-global-profile`, `ai-standards` |
-| Cross-links forming a graph | ⚠️ via `[[wikilink]]`, not `[text](path.md)` |
-| An `index.md` per directory | ❌ not generated |
-| No SDK, no proprietary account, git-versionable | ✅ |
+| **`type` — the only required key** | ✅ `ai-project-context`, `ai-lesson`, `ai-session-log`, `ai-global-profile`, `ai-standards` |
+| Recommended: `title`, `description`, `resource`, `tags` | ⚠️ partial — notes carry their own fields instead |
+| Cross-links as standard markdown links | ⚠️ `[[wikilink]]` instead |
+| `index.md` / `log.md` | optional in the spec; not generated here |
+| No SDK, no account, git-versionable | ✅ |
 
-Two deliberate deviations. **Links stay Obsidian-style** — the vault is meant
-to be opened in Obsidian, and the graph view and backlinks are the reason
-many people keep one; `ai-mem-search` resolves `[[wikilinks]]` itself. **No
-`index.md`** because nothing here reads one yet, and a generated index that
-nobody consumes is a file that goes stale.
+One real deviation: **links stay Obsidian-style.** The vault is meant to be
+opened in Obsidian, where the graph view and backlinks are much of why anyone
+keeps one, and `ai-mem-search` resolves `[[wikilinks]]` itself. A strict OKF
+consumer would not follow them — though the spec already requires consumers
+to tolerate links that do not resolve.
+
+No `index.md` is generated, and that is a choice rather than a gap: nothing
+here reads one, `grep` does not consult it, and a materialized index is
+exactly the thing that goes stale when a file is renamed. The lesson index is
+built at launch from the directory itself for the same reason.
 
 Session logs predate the `type` field, so a vault that has been in use holds
 notes without it. `ai-mem-lint` counts them, and `ai-mem-lint --fix`
