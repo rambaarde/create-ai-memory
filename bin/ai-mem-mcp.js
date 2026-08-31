@@ -88,50 +88,88 @@ function insideVault(p) {
   }
 }
 
+/**
+ * Ambient guidance, returned from `initialize` and surfaced by the client
+ * before the first turn.
+ *
+ * This is what makes a GUI behave like a launcher. In a terminal the vault is
+ * pushed into the agent's opening prompt; over MCP nothing is pushed, and a
+ * model with no reason to suspect a memory exists will simply never call a
+ * tool. Saying so once, up front, is the whole difference.
+ *
+ * Kept deliberately short and free of bulk. The obvious move is to inline the
+ * profile, standards and lesson list here so a GUI gets everything the
+ * launcher injects -- but instructions are paid on every connection whether
+ * used or not, and clients are free to truncate or ignore the field. A cheap
+ * nudge plus one get_context call is both smaller and more robust than a
+ * large block that may be silently dropped.
+ */
+const INSTRUCTIONS = [
+  "This is the user's persistent memory across every AI tool they use: past sessions, project decisions, and lessons learned the hard way.",
+  '',
+  'Before answering anything about their work, call get_context. It returns their profile, standards, the current project note, and what the last session concluded.',
+  'Before solving a problem, call search_memory -- they may have solved it already, and repeating a solved mistake is the failure this vault exists to prevent. Search broadly first; too specific a first query is the usual way to miss something.',
+  '',
+  'Write back. A session that only reads leaves nothing behind, and the next one starts cold:',
+  '- add_note for what happened, decided, or broke during this session.',
+  '- add_lesson for something worth recalling in a DIFFERENT project later. Not project trivia -- the transferable part.',
+].join('\n');
+
+// Descriptions stay terse on purpose. Every schema below is re-sent on each
+// turn, so prose here is a recurring cost: measured at ~380 tokens for four
+// verbosely-described tools. Behavior guidance belongs in INSTRUCTIONS, said
+// once, rather than restated inside each tool.
 const TOOLS = [
   {
     name: 'search_memory',
-    description:
-      'Full-text search across the AI memory vault: past sessions, project notes, and cross-project lessons. ' +
-      'Case-insensitive, matches literally, newest result first, output capped. ' +
-      'Start broad and narrow down -- too specific a first query is the usual way to miss something.',
+    description: 'Search all past sessions, project notes and lessons. Literal, case-insensitive, newest first.',
     inputSchema: {
       type: 'object',
       properties: {
-        term: { type: 'string', description: 'Text to find. Matched literally, not as a regex.' },
-        project: { type: 'string', description: 'Optional: restrict to one project\'s session logs.' },
+        term: { type: 'string', description: 'Text to find. Not a regex.' },
+        project: { type: 'string', description: 'Optional: one project only.' },
       },
       required: ['term'],
     },
   },
   {
     name: 'get_context',
-    description:
-      'The vault context block for a project: global profile, standards, project note path, ' +
-      'a digest of the previous session, and the list of recorded lesson topics. ' +
-      'This is what the shell launchers inject at startup. Read it before acting.',
+    description: 'The user\'s profile, standards, current project note, last session digest, and known lesson topics.',
     inputSchema: {
       type: 'object',
-      properties: {
-        project: { type: 'string', description: 'Project name. Defaults to the vault\'s active project.' },
-      },
+      properties: { project: { type: 'string', description: 'Defaults to the active project.' } },
     },
   },
   {
     name: 'read_note',
-    description: 'Read one note from the vault by path. Paths outside the vault are refused.',
+    description: 'Read one vault note by path.',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string', description: 'Absolute path, or one relative to the vault root.' } },
+      properties: { path: { type: 'string', description: 'Absolute, or relative to the vault root.' } },
       required: ['path'],
     },
   },
   {
-    name: 'list_lessons',
-    description:
-      'List every recorded cross-project lesson by topic slug, newest first. Names only, no bodies -- ' +
-      'read one with read_note or search_memory. Use this to find out what is already known.',
-    inputSchema: { type: 'object', properties: {} },
+    name: 'add_note',
+    description: 'Append a timestamped note to today\'s session log. Use for what happened or was decided.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string', description: 'What to record.' } },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'add_lesson',
+    description: 'Record a problem and its solution as a cross-project lesson. Use only for something that will matter in a different project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: 'Short slug, e.g. rate-limiting.' },
+        problem: { type: 'string', description: 'What went wrong.' },
+        solution: { type: 'string', description: 'What fixed it.' },
+      },
+      required: ['topic', 'problem', 'solution'],
+    },
   },
 ];
 
@@ -142,8 +180,17 @@ function callTool(name, args = {}) {
       return zsh(`ai-mem-search ${q(args.term)} ${args.project ? q(args.project) : ''}`);
     case 'get_context':
       return zsh(`ai-context ${args.project ? q(args.project) : ''}`);
-    case 'list_lessons':
-      return zsh('__ai_mem_lesson_index');
+    // ai-note and ai-lesson both push the vault themselves, so a GUI write is
+    // committed and backed up exactly like a terminal one -- no separate step
+    // for the model to forget.
+    case 'add_note':
+      if (!args.text) return { ok: false, text: 'text is required' };
+      return zsh(`ai-note ${q(args.text)}`);
+    case 'add_lesson':
+      if (!args.topic || !args.problem || !args.solution) {
+        return { ok: false, text: 'topic, problem and solution are all required' };
+      }
+      return zsh(`ai-lesson ${q(args.topic)} ${q(args.problem)} ${q(args.solution)}`);
     case 'read_note': {
       const p = insideVault(args.path || '');
       if (!p) return { ok: false, text: `refused: ${args.path} is not inside the vault` };
@@ -173,6 +220,7 @@ function handle(req) {
         protocolVersion: params?.protocolVersion || '2025-06-18',
         capabilities: { tools: {} },
         serverInfo: { name: 'ai-memory', version: VERSION },
+        instructions: INSTRUCTIONS,
       },
     });
   }
