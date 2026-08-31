@@ -336,7 +336,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
 | `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 40) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
-| `ai-mem-serve [port]` | Serve the vault as a browsable graph on `127.0.0.1` (see [Graph view](#graph-view)) |
+| `ai-mem-serve [port] [--no-open]` | Open the vault as a browsable graph on `127.0.0.1`. Agents run this for you when you ask to see your memory (see [Graph view](#graph-view)) |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
 Project is auto-resolved from the current git repo; pass a name to override.
@@ -698,9 +698,20 @@ an agent-run command.
 other one — what is in there at all, and which notes turned out to be
 connected.
 
+You should not usually have to run this. **Ask the agent** — "open my memory",
+"show me my context" — and it will: the launch prompt tells terminal agents
+the viewer exists, and GUI clients get an `open_graph` tool over MCP. Running
+it by hand stays available:
+
 ```sh
-ai-mem-serve          # http://127.0.0.1:7777
+ai-mem-serve          # opens a browser at http://127.0.0.1:7777
+ai-mem-serve 8080 --no-open
 ```
+
+Asked twice, the second call finds the first still listening and just opens
+the tab. An agent should not have to check whether it is already running, and
+a port collision with **its own** server is not a failure worth reporting —
+though a port held by something else still is.
 
 ![The vault as a graph: notes coloured by type, a lesson selected, its linked project highlighted](assets/graph-view.png)
 
@@ -747,8 +758,9 @@ see nothing.
 
 **Cursor** — `~/.cursor/mcp.json`, same shape.
 
-Five tools, read **and** write, so a GUI session is not a dead end:
-`search_memory`, `get_context`, `read_note`, `add_note`, `add_lesson`. Each
+Six tools, read **and** write, so a GUI session is not a dead end:
+`search_memory`, `get_context`, `read_note`, `add_note`, `add_lesson`, and
+`open_graph` (which launches the [graph view](#graph-view) for them). Each
 shells out to the same zsh functions the CLI uses, so there is one
 implementation of the rules rather than a copy that drifts -- a note written
 from Claude Desktop is committed and pushed exactly like one written in a
@@ -768,8 +780,8 @@ actually uses.
 **On cost.** Tool schemas are re-sent every turn, so their prose is a
 recurring tax; the `instructions` brief is sent once. Behaviour guidance
 therefore lives in `instructions` and the descriptions stay terse. Adding the
-two write tools cost nothing per turn as a result: five tools now total ~379
-tokens against ~380 for the original four, with a one-time ~205 for the brief.
+write tools cost nothing per turn as a result: six tools now total ~429
+tokens against ~380 for the original four, with a one-time ~227 for the brief.
 
 **Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
 opencode all have a shell and should call `ai-mem-search` directly; wrapping a

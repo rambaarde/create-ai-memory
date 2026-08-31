@@ -677,7 +677,7 @@ mcpfield() { node -e '
   else if(process.argv[3]==="error") process.stdout.write(m.error?m.error.message:"");
 ' "$MCP_OUT" "$1" "$2"; }
 
-is "$(mcpfield 2 tools)" "add_lesson,add_note,get_context,read_note,search_memory" "MCP server advertises its read and write tools"
+is "$(mcpfield 2 tools)" "add_lesson,add_note,get_context,open_graph,read_note,search_memory" "MCP server advertises its read, write and viewer tools"
 has "$(mcpfield 3 text)" "needle" "MCP search reaches the vault's contents"
 
 # "no matches" is an answer, not a transport fault: the model must see it and
@@ -918,6 +918,41 @@ fails 'AI_MEM_ROOT="'"$NOTEVAULT"'" zsh -c "
   unfunction __ai_mem_vault_backup
   ai-mem-vault-backup
 "' "ai-mem-vault-backup exits non-zero when its helper was dropped"
+
+# --- opening the viewer on request -------------------------------------------
+# The point is that the user asks, not that they run a command. A terminal
+# agent only offers what the prompt told it exists; a GUI only has the tool.
+has "$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_context_prompt "/tmp/p.md" "" "/tmp/s.md"
+')" "ai-mem-serve" "the launch prompt tells a terminal agent the viewer exists"
+
+# Asked twice, the second call must succeed rather than report a port
+# collision -- an agent should not have to check whether it is already up.
+IDEM_PORT=7796
+AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$IDEM_PORT" --no-open >/dev/null 2>&1 &
+IDEM_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  curl -sf -o /dev/null "http://127.0.0.1:$IDEM_PORT/api/graph" 2>/dev/null && break
+  sleep 0.3
+done
+AGAIN="$(AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$IDEM_PORT" --no-open 2>&1)"
+AGAIN_CODE=$?
+is  "$AGAIN_CODE" "0"              "ai-mem-serve exits clean when it is already running"
+has "$AGAIN" "already running"     "ai-mem-serve says it found an existing server rather than erroring"
+kill $IDEM_PID 2>/dev/null
+
+# A port held by something that is NOT this server is a real failure and must
+# still be reported as one.
+node -e 'require("net").createServer().listen(7797,"127.0.0.1",()=>setTimeout(()=>process.exit(0),8000))' >/dev/null 2>&1 &
+FOREIGN_PID=$!
+sleep 1
+if AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" 7797 --no-open >/dev/null 2>&1; then
+  nok "ai-mem-serve still fails when the port belongs to something else"
+else
+  ok "ai-mem-serve still fails when the port belongs to something else"
+fi
+kill $FOREIGN_PID 2>/dev/null
 
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
