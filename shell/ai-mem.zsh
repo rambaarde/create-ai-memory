@@ -465,6 +465,16 @@ __ai_mem_context_prompt() {
         fi
     fi
 
+    # A project note straight from the template is worse than no note: the
+    # prompt points at it as "Project context", the agent opens it, and finds
+    # "[What problem this repository solves]". That reads as context and
+    # carries none -- the same present-but-empty failure as a search that
+    # returns nothing while looking authoritative. Say so, and say what to do.
+    local project_state=""
+    if [[ -f "$project_note" ]] && grep -q '\[What problem this repository solves\]' "$project_note" 2>/dev/null; then
+        project_state=" -- NOT YET FILLED IN: it is still the blank template, so it holds no context. Read the repo (README, package manifest, AGENTS.md/CLAUDE.md, recent git log) and fill it in early in this session; every future session on this repo starts from it."
+    fi
+
     cat <<EOF
 Read these notes before doing anything else:
 - Global profile:
@@ -473,7 +483,7 @@ $(__ai_mem_note_contents "$AI_MEM_GLOBAL")
 - Standards:
 $(__ai_mem_note_contents "$AI_MEM_STANDARDS")
 
-- Project context: $project_note
+- Project context: $project_note$project_state
 $previous_session_block
 - Active session log: $session_note
 $(__ai_mem_lesson_index)
@@ -481,7 +491,7 @@ $(__ai_mem_lesson_index)
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
-For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
+For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are zsh functions from the sourced module, so \`command -v\` finds them but \`which\` under bash will not. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
 When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down; lessons are ranked above session logs in the results, so a hit under \`_lessons/\` is the recorded fix.
 Search ONE distinctive word, not a sentence. Matching is literal substring, so a whole error line ('command not found: sed') finds nothing while 'command not found' finds it, and a bare tool name ('sed', 'git') returns hundreds of irrelevant lines. Pick the most unusual word in the symptom and try two or three of them separately.
 If the user asks to see, open or browse their memory rather than search it, run \`ai-mem-serve\` -- it opens the vault as a graph in their browser, and is safe to run again if it is already up.
