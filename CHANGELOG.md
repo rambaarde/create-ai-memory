@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.14.0](https://github.com/rambaarde/create-ai-memory/compare/v0.13.0...v0.14.0) (2026-08-31)
+
+
+### Features
+
+* **mcp:** give shell-less GUI clients access to the vault ([73d4db3](https://github.com/rambaarde/create-ai-memory/commit/73d4db35b6f95bc3bb6978ab33e9ba887b6b9a6e))
+* **mcp:** give shell-less GUI clients access to the vault ([cdf5955](https://github.com/rambaarde/create-ai-memory/commit/cdf5955beea94245973c54876eb618b8b350f4a0))
+* **mcp:** give shell-less GUI clients access to the vault ([07a674d](https://github.com/rambaarde/create-ai-memory/commit/07a674d8f36f6f7ef647492a5331a11bfad156ef))
+* **mcp:** let GUI clients write back, and cut the per-turn tool cost ([8f22f4b](https://github.com/rambaarde/create-ai-memory/commit/8f22f4b38959652c3731f12c40b9373c4071a553))
+* **mcp:** let GUI clients write back, and cut the per-turn tool cost ([65d3763](https://github.com/rambaarde/create-ai-memory/commit/65d3763fb699209d237df1d4f9960a55816479c3))
+* **mcp:** let GUI clients write back, and cut the per-turn tool cost ([a498bfb](https://github.com/rambaarde/create-ai-memory/commit/a498bfb33771353d978a8962bfe637756b546c02))
+* **serve:** browse the vault as a graph ([da2245c](https://github.com/rambaarde/create-ai-memory/commit/da2245c04726080e43af78d60edea99bfbae9a4d))
+* **serve:** browse the vault as a graph ([9dce644](https://github.com/rambaarde/create-ai-memory/commit/9dce6444ab04842498dc107222dc02616687d4b8))
+* **serve:** browse the vault as a graph ([25b43e8](https://github.com/rambaarde/create-ai-memory/commit/25b43e88b8c6527d2d5cdbf58e4ca68dbc44b29b))
+* **serve:** open the memory graph on request, not by hand ([5ac058a](https://github.com/rambaarde/create-ai-memory/commit/5ac058ab53b59e5f453563406bce1904c7aa39e5))
+* **serve:** open the memory graph on request, not by hand ([1bde016](https://github.com/rambaarde/create-ai-memory/commit/1bde016825d874b0fa536f87fa981362ad89a7ad))
+* **serve:** open the memory graph on request, not by hand ([667cbc8](https://github.com/rambaarde/create-ai-memory/commit/667cbc88910f7911706bf6b2f193fd6d2c6c63b2))
+
+
+### Bug Fixes
+
+* **adapters:** launch cursor-agent, which can actually take the prompt ([84687f3](https://github.com/rambaarde/create-ai-memory/commit/84687f3e1b8316f2f3ea2aa8b74a20c26e889d0e))
+* **adapters:** launch cursor-agent, which can actually take the prompt ([f460810](https://github.com/rambaarde/create-ai-memory/commit/f46081035081d1d726d8842382c7cd302cda7d82))
+* **adapters:** launch cursor-agent, which can actually take the prompt ([3f67aec](https://github.com/rambaarde/create-ai-memory/commit/3f67aec67188aebf50154271f28f6115911de080))
+
 ## [0.13.0](https://github.com/rambaarde/create-ai-memory/compare/v0.12.0...v0.13.0) (2026-08-31)
 
 
