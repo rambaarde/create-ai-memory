@@ -14,6 +14,13 @@ REPO_ROOT="${0:A:h:h}"
 
 # --- tiny TAP-ish harness -----------------------------------------------------
 integer PASS=0 FAIL=0
+# Every server this suite starts is tracked and killed on the way out, however
+# the run ends. A lingering one keeps a fixture vault bound to a fixed port,
+# and the next `ai-mem-serve` attaches to it and shows three fake notes
+# instead of the user's vault -- which is exactly what happened once.
+typeset -ga SERVERS=()
+cleanup_servers() { local p; for p in $SERVERS; do kill $p 2>/dev/null; done }
+trap cleanup_servers EXIT INT TERM
 ok()  { print -r -- "ok   - $1"; (( PASS++ )); }
 nok() { print -r -- "NOT OK - $1"; (( FAIL++ )); }
 is()       { [[ "$1" == "$2" ]] && ok "$3" || nok "$3 (got [$1] want [$2])"; }
@@ -580,6 +587,7 @@ print -rl -- "---" "type: ai-lesson" "---" "# Orphan" "points at [[nothing-here]
 GPORT=7793
 AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" >/dev/null 2>&1 &
 GPID=$!
+SERVERS+=($!)
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   curl -sf -o /dev/null "http://127.0.0.1:$GPORT/api/graph" 2>/dev/null && break
   sleep 0.3
@@ -603,6 +611,51 @@ is "$(gfield nodes)" "3" "graph server returns every note as a node"
 is "$(gfield edges)" "1" "graph server drops a wikilink with no matching note"
 has "$(gfield edgepair)" "_projects/demo.md" "graph server resolves a wikilink by basename"
 is "$(gfield tags)" "alpha|beta" "graph server parses an inline frontmatter list"
+
+# Notes are created from templates and inherit the template's heading. Titling
+# by first H1 gave 354 notes the label "Session Outcome" and 34 "Project
+# Snapshot" on a real vault -- every project and every log sharing two names
+# between them, which is worse than no labels at all.
+TVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$TVAULT/_projects" "$TVAULT/_session_logs/demo" "$TVAULT/_lessons"
+print -rl -- "---" "type: ai-project-context" "project_name: alpha-svc" "---" "# Project Snapshot" > "$TVAULT/_projects/alpha-svc.md"
+print -rl -- "---" "type: ai-project-context" "---" "# Project Snapshot" > "$TVAULT/_projects/beta-svc.md"
+print -rl -- "---" "type: ai-session-log" "---" "# Session Outcome" > "$TVAULT/_session_logs/demo/demo-2026-08-31_09-15-00.md"
+print -rl -- "---" "type: ai-session-log" "---" "# Session Outcome" > "$TVAULT/_session_logs/demo/demo-2026-08-30_14-02-00.md"
+print -rl -- "---" "type: ai-lesson" "---" "# a-genuinely-unique-heading" > "$TVAULT/_lessons/uniq.md"
+
+TPORT=7798
+AI_MEM_ROOT="$TVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$TPORT" --no-open >/dev/null 2>&1 &
+TPID=$!
+SERVERS+=($TPID)
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  curl -sf -o /dev/null "http://127.0.0.1:$TPORT/api/graph" 2>/dev/null && break
+  sleep 0.3
+done
+TITLES="$(curl -sf "http://127.0.0.1:$TPORT/api/graph" 2>/dev/null | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const g=JSON.parse(s);process.stdout.write(g.nodes.map(n=>n.title).sort().join("|"))})')"
+hasnt "$TITLES" "Project Snapshot" "a template heading shared by several notes is not used as a title"
+hasnt "$TITLES" "Session Outcome"  "a shared session heading is not used as a title either"
+has   "$TITLES" "alpha-svc"        "a project note is titled by its project_name"
+has   "$TITLES" "beta-svc"         "a project note with no project_name falls back to its filename"
+has   "$TITLES" "a-genuinely-unique-heading" "an H1 unique to one note is still used as its title"
+has   "$TITLES" "2026-08-31 09:15" "a session log is titled by its moment, which is what distinguishes it"
+kill $TPID 2>/dev/null
+
+# The viewer attaches to an already-running server so an agent need not check.
+# That must not mean attaching to a server for a DIFFERENT vault: a leftover
+# from a test run answers /api/graph perfectly well, and silently showing the
+# wrong notes while reporting success is the exact failure this tool exists to
+# prevent.
+OTHER="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$OTHER/_projects"
+print -rl -- "---" "type: ai-project-context" "---" "# Other" > "$OTHER/_projects/other.md"
+MISMATCH="$(AI_MEM_ROOT="$OTHER" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" --no-open 2>&1)"
+MISMATCH_CODE=$?
+is  "$MISMATCH_CODE" "1"                    "ai-mem-serve refuses a port already serving a different vault"
+has "$MISMATCH" "different vault"           "ai-mem-serve says the vault differs rather than claiming success"
+has "$MISMATCH" "$GVAULT"                   "ai-mem-serve names which vault is actually being served"
 has "$(gfield types)" "ai-project-context" "graph server reports each note's declared type"
 
 NOTE_OK="$(curl -sf "http://127.0.0.1:$GPORT/api/note?path=_projects/demo.md" 2>/dev/null)"
@@ -980,6 +1033,7 @@ has "$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
 IDEM_PORT=7796
 AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$IDEM_PORT" --no-open >/dev/null 2>&1 &
 IDEM_PID=$!
+SERVERS+=($!)
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   curl -sf -o /dev/null "http://127.0.0.1:$IDEM_PORT/api/graph" 2>/dev/null && break
   sleep 0.3
@@ -994,6 +1048,7 @@ kill $IDEM_PID 2>/dev/null
 # still be reported as one.
 node -e 'require("net").createServer().listen(7797,"127.0.0.1",()=>setTimeout(()=>process.exit(0),8000))' >/dev/null 2>&1 &
 FOREIGN_PID=$!
+SERVERS+=($!)
 sleep 1
 if AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" 7797 --no-open >/dev/null 2>&1; then
   nok "ai-mem-serve still fails when the port belongs to something else"
