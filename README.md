@@ -33,69 +33,33 @@ npm create ai-memory@latest
 
 ## The problem
 
-Every AI coding session starts from zero.
+Every AI coding session starts from zero. The moment a thread ends, the agent
+forgets what was built, why each choice was made, and where you left off.
 
-Claude Code, Codex, Gemini CLI. The moment a session ends, the agent forgets what
-was built, the decisions that were made, the PRD, every architectural and codebase
-choice. The context that mattered most evaporates with the chat thread, and the
-next run begins blind.
-
-You pay the same tax on every run:
-
-- **Agent amnesia.** Accumulated project knowledge vanishes when the thread closes.
-- **Lost decisions.** Why a choice was made is nowhere; the next run re-litigates it.
-- **Reload overhead.** You re-explain the stack, constraints, and conventions from scratch.
-- **No continuity.** Nothing carries "where I left off" into the next session.
-
-Switching agents makes it worse. Each CLI is its own island with its own memory,
-or none. Knowledge earned in Claude doesn't reach Codex.
+You pay it again on the next run: re-explaining the stack, re-litigating
+settled decisions, losing "where I was". Switching agents makes it worse —
+each CLI is its own island, so what Claude learned never reaches Codex.
 
 ## How it works
 
-Keep the memory outside the chat, in plain Markdown on disk, and inject it into
-whichever agent you launch. A chat thread is disposable; the vault is permanent.
-Because it is just files, the same vault opens as an
-[Obsidian](https://obsidian.md) second brain with graph view, backlinks, and
-search. Nothing here requires Obsidian; it is Markdown either way.
+Keep the memory outside the chat, in plain Markdown on disk, and inject it
+into whichever agent you launch. A thread is disposable; the vault is
+permanent. Because it is just files, the same vault opens in
+[Obsidian](https://obsidian.md) with graph view and backlinks — though
+nothing here requires it.
 
-Memory sits in three layers, each injected at the right scope:
+Three layers, each injected at the right scope:
 
 | Layer | Lives in | Injected | Holds |
 |---|---|---|---|
-| **Global** | `_Global_Profile.md`, `_Standards.md` | every session, every project | who you are, your rules, coding standards, commit policy |
-| **Project** | `_projects/<repo>.md` | sessions in that repo | purpose, architecture, constraints, active decisions |
+| **Global** | `_Global_Profile.md`, `_Standards.md` | every session | who you are, your rules, commit policy |
+| **Project** | `_projects/<repo>.md` | sessions in that repo | purpose, architecture, constraints, decisions |
 | **Session** | `_session_logs/<repo>/<timestamp>.md` | next session as carryover | what changed, blockers, next steps |
 
-When you run a launcher, create-ai-memory assembles those layers into one prompt and
-hands it to the agent as its opening message:
-
-```
-  $ claude-start
-        │
-        ├─ resolve the project from the current git repo
-        ├─ create a fresh session log from the template
-        ├─ gather:  Global Profile + Standards         (who you are)
-        │           Project note                        (this repo)
-        │           prior session's outcome             (where you left off, inlined)
-        ├─ ask which session skills to enable           (optional)
-        └─ launch the agent with all of it as the first prompt
-              │
-              ▼
-        …you work…
-              │
-              ▼
-        on exit, a hook writes an auto session log
-        (branch, commits made, uncommitted changes)
-        → the NEXT session inherits it as carryover
-```
-
-The prior session's outcome is extracted from the log and inlined into the opening
-prompt directly — not just a path the agent is told to go read. No separate file,
-no index, nothing new in the vault: it's read straight out of the session log you
-already have, every launch.
-
-One environment variable, `AI_MEM_ROOT`, points at the vault, so the whole system
-moves between machines by pointing at the same folder.
+The prior session's outcome is **inlined into the opening prompt**, not left
+as a path the agent is told to go read. One environment variable,
+`AI_MEM_ROOT`, points at the vault, so the whole system moves between
+machines by pointing at the same folder.
 
 ## The full loop
 
@@ -337,7 +301,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
-| `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 40) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
+| `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 25) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
 | `ai-mem-serve [port] [--no-open]` | Open the vault as a browsable graph on `127.0.0.1`. Agents run this for you when you ask to see your memory (see [Graph view](#graph-view)) |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
@@ -345,10 +309,9 @@ Project is auto-resolved from the current git repo; pass a name to override.
 
 ## How search works
 
-Searching the vault reads your notes directly, every time. Nothing is
-prepared in advance: no index to rebuild, no background service, no
-embeddings to regenerate, nothing that can quietly fall out of date. A note
-is findable the second you write it.
+Reads your notes directly, every time. No index, no daemon, no embeddings —
+nothing to rebuild and nothing that can go stale. A note is findable the
+second you write it.
 
 ```mermaid
 flowchart TD
@@ -359,7 +322,7 @@ flowchart TD
     D --> E
     E -->|"found nothing"| F["<b>Says so, plainly.</b><br/>Never a blank screen you<br/>could mistake for 'none exist'"]
     E -->|"found something"| G["Newest first"]
-    G --> H["Show the first 40<br/>and say how many more there are"]
+    G --> H["Show a few from each note<br/>and say how many more there are"]
     H --> I["Follow any linked note one step,<br/>with a one-line summary of it"]
     I --> J(["What you read"])
 
@@ -371,230 +334,127 @@ flowchart TD
     class J done
 ```
 
-Two boxes are shaded because they are the ones that matter: an empty result
-that **says** it is empty, and an output short enough to read to the end.
-
-That is the whole idea. The rest of this section is the mechanism -- one
-`grep -rniF`, then a sort, then a cap -- and why each piece is the way it is.
-Every flag exists because the alternative produced a wrong answer on a real
-vault. Skip it unless you are changing the code.
+The shaded boxes are the two that matter: an empty result that **says** it is
+empty, and an output short enough to read to the end.
 
 ```console
 $ ai-mem-search prisma
-238 match(es) for 'prisma'
+240 match(es) for 'prisma'
 paths below /Users/you/_Ai_Memory
 --
 _session_logs/checkout-api/checkout-api-2026-08-31_00-00-00.md:56:  - **A green deploy log is not evidence a migration ran.** Verify against `_prisma_migrations`.
-_session_logs/checkout-api/checkout-api-2026-08-31_00-00-00.md:55:  - **`prisma migrate deploy` cannot see `prisma/migrations/<name>.sql`.** Only `<name>/migration.sql`. It skips loose files silently -- a  [...]
 ...
 --
-showing 40 of 238 (198 hidden) -- narrow with: ai-mem-search 'prisma' <project>, or raise AI_MEM_SEARCH_LIMIT
+showing 25 of 240 (215 hidden), across 25 file(s), at most 1 line(s) each -- for more lines per file raise AI_MEM_SEARCH_PER_FILE, or narrow with: ai-mem-search 'prisma' <project>
 ```
 
-**Case-insensitive (`-i`).** A false empty state is the worst answer a memory
-tool can give, because it is indistinguishable from the truth -- and the
-explicit `no matches` message is exactly what makes it look authoritative.
-Measured on a real vault: `precompact` found 0 matches case-sensitively and 3
-with `-i`; `Postgres` found 56 versus 90.
+Under the hood it is one `grep -rniF`, a sort, and a cap. Each choice exists
+because the alternative gave a wrong answer on a real vault:
 
-**Literal, not regex (`-F`).** The caller is usually an agent passing free
-text, where a stray `.`, `(` or `|` must match itself. `ai-mem-search .env`
-finds `.env`, not every four-character string ending in `env`.
-
-**Newest first.** The sort key is the `YYYY-MM-DD_HH-MM-SS` embedded in the
-log filename. For a time series the most recent match is usually the relevant
-one, so a large result set stays useful at a glance without any relevance
-ranking. Files with no timestamp in the name (`_Global_Profile.md`, project
-notes) sort last.
-
-**Bounded output.** The count comes first, before the results -- you need the
-size of the result set to interpret it. Then at most `AI_MEM_SEARCH_LIMIT`
-lines (default 40), and if anything was withheld, an explicit `N hidden` line
-with the command to narrow. This is for the agent, not for you: an unbounded
-dump of a common term ran ~29k tokens, overflowed the host's tool-response
-cap, and got silently truncated -- leaving the agent unable to tell "hidden"
-from "absent". Near-miss padding is also the most damaging kind of distractor
-for a model, so fewer clean hits beat more of them.
-
-**Compact lines.** The vault root is printed once in the header and stripped
-from every result path (a third to a half of all output bytes on a real
-vault, no information lost). Lines longer than 200 characters are clamped
-with `[...]`, since prose notes routinely run long.
-
-**One hop out.** Any `[[wikilink]]` on a matched line is resolved to its
-project note and shown with a one-line excerpt under `one hop out:`. A
-`_lessons` entry names the projects it came from, so a hit there tells you
-where it happened without a second search. Always on, not a flag to remember.
-
-```console
-$ ai-mem-search '[[create-ai-memory]]'
-11 match(es) for '[[create-ai-memory]]'
-...
---
-one hop out:
-  [[create-ai-memory]] -> /Users/you/_Ai_Memory/_projects/create-ai-memory.md
-    * **Current Objective:** ship the vault-backup fix
-```
-
-(That query is also `-F` earning its keep: `[[` is matched literally, not as
-a character class.)
-
-**Scoping.** A second argument restricts the search to one project's session
-logs -- `ai-mem-search postgres checkout-api`. Unknown project names fail
-explicitly rather than silently searching everything.
-
-### Mirrored notes are not injected twice
-
-`_Standards.md` ships declaring `mirror_of: _Global_Profile.md` in its
-frontmatter. The mirror exists so the shared rules stay visible wherever only
-one of the two notes is read -- but the launch prompt reads *both*, so
-injecting both in full restates text the model has just finished reading.
-
-When a note declares `mirror_of: <sibling note>`, only the lines that
-actually differ from that source are injected, under a one-line marker
-naming what was elided:
-
-```text
-- Standards:
-(mirror of _Global_Profile.md, shown above -- only the lines that differ from it are repeated here)
-## Standards Addendum
-* Keep `_Standards.md` and `_Global_Profile.md` in lockstep when shared rules change.
-...
-```
-
-Measured on a real vault: 72 of the mirror's 80 unique lines were already
-verbatim in its source, and the launch prompt went from **~7,200 to ~4,300
-tokens -- a 40% cut with nothing lost**, paid once per session per agent.
-
-Matching is exact, line by line, so anything reworded is kept -- a near-match
-is a real edit. The comparison fails **open** in every uncertain case: no
-frontmatter, a missing source, a `mirror_of` containing a path separator, or
-a diff that would leave nothing all inject the note in full. Injecting a note
-twice costs tokens; dropping one costs the agent context it was promised, and
-those are not the same kind of mistake.
+| choice | why |
+|---|---|
+| **Case-insensitive** | A false empty is the worst answer a memory tool can give. `precompact` found 0 case-sensitively and 3 with `-i`; `Postgres` 56 vs 90. |
+| **Literal, not regex** | The caller is usually an agent passing free text, where a stray `.` or `(` must match itself. |
+| **Newest first** | Sorted on the timestamp in the filename. For a time series the newest hit is usually the right one, so no ranking is needed. |
+| **Bounded output** | Unbounded, a common term ran ~29k tokens and was silently truncated by the host — leaving the agent unable to tell *hidden* from *absent*. |
+| **One line per file** | Until the budget binds. Spends it on distinct notes rather than the chattiest one. |
+| **Compact lines** | Vault root printed once and stripped from every path; lines over 200 chars clamped. |
+| **One hop out** | Any `[[wikilink]]` on a hit resolves to its project note with a one-line excerpt, so a lesson tells you where it happened without a second search. |
 
 ### What it costs, and what it cannot do
 
-Everything below is measured, not estimated. Reproduce any row with the
-command beside it.
+Measured, not estimated. Reproduce with `ai-mem-search <term>`.
 
-**Matching is substring, case-insensitive, literal.** Not word matching, not
-stemming, not fuzzy. On a real 501-note vault:
+**Matching is substring, case-insensitive, literal** — not word matching, not
+stemming, not fuzzy:
 
-| query | matches | why |
+| query | matches | |
 |---|---|---|
-| `git` | 765 | substring — also hits `github`, `gitignore` |
+| `git` | 765 | substring — also hits `github` |
 | `github` | 255 | a subset of the above |
-| `Postgres` / `POSTGRES` / `postgre` | 93 each | case is ignored; a prefix still matches |
-| `.env` | 131 | `-F` — the dot matches a literal dot |
-| `env` | 307 | more, because `.env` is a narrower string |
-| `postgress` *(typo)* | **0** | **no fuzzy matching. A misspelling finds nothing.** |
+| `Postgres` / `POSTGRES` / `postgre` | 93 each | case ignored, prefix matches |
+| `.env` | 131 | the dot is literal |
+| `env` | 307 | more — `.env` is narrower |
+| `postgress` *(typo)* | **0** | **no fuzzy matching** |
 
-That last row is the honest limit. There is no spell correction and no synonym
-expansion, so the strategy has to be *start broad and narrow* — search
-`postgres` before `postgres connection pool timeout`.
+That last row is the limit: a misspelling finds nothing. Search broad, then
+narrow — `postgres` before `postgres connection pool timeout`.
 
-**Token cost is bounded, whatever the result size.** This is the property that
-matters when an agent is the reader:
+**Token cost is bounded and flat:**
 
-| query | matches | tokens returned |
+| matches | tokens |
+|---|---|
+| 0 | ~23 |
+| 240 | ~1,224 |
+| 10,198 | ~1,270 |
+
+Forty times the matches for the same cost.
+
+**Speed is linear in vault size**, dominated by how many lines match:
+
+| vault | rare term | common term |
 |---|---|---|
-| a term with no hits | 0 | **~23** |
-| `idempotency` | 14 | ~619 |
-| `prisma` | 240 | ~1,752 |
-| `the` | 10,198 | **~1,805** |
-
-Ten thousand matches costs three percent more than two hundred. The cap is
-what makes the tool safe to hand an agent — an unbounded `grep` of a common
-term ran ~29k tokens and was silently truncated by the host, leaving the model
-unable to tell "withheld" from "absent".
-
-**Speed is linear in vault size, and dominated by how many lines match.**
-
-| vault | rare term (scan only) | common term (many matches) |
-|---|---|---|
-| 501 notes *(a real vault)* | — | **0.07 s** |
-| 500 notes, dense synthetic | 0.12 s | 0.34 s |
-| 2,000 | 0.35 s | 1.29 s |
+| 501 notes *(real)* | — | **0.07 s** |
+| 2,000 *(synthetic)* | 0.35 s | 1.29 s |
 | 10,000 | 1.74 s | 7.20 s |
-| 50,000 | — | tens of seconds |
 
-```sh
-time ai-mem-search postgres >/dev/null
-```
-
-Comfortable to a few thousand notes, which is years of daily logs. Past
-roughly ten thousand a common term becomes noticeable, and the fix is to scope
-it — `ai-mem-search <term> <project>` searches one project's logs instead of
-the whole vault. If you ever outgrow that, the honest answer is that this tool
-is the wrong shape for you and you want a real index.
+Comfortable to a few thousand notes — years of daily logs. Past ~10k, scope
+it: `ai-mem-search <term> <project>`. If that is not enough, this is the wrong
+tool and you want a real index.
 
 ### Is it used while you code, or only at launch?
 
-Worth being blunt, because it is the question that decides whether this is
-useful to you.
+**Pushed once at launch** (~4,300 tokens): your profile, standards, the
+project note's path, a digest of the last session, and the lesson topics.
 
-**Pushed automatically, once, at launch** — `claude-start` and friends inject
-your profile, your standards, the project note's path, a digest of the last
-session, and the list of lesson topics. About **4,300 tokens**.
+**Pulled on demand after that.** Nothing re-injects. The agent reaches the
+vault mid-session only by running `ai-mem-search` itself — which the launch
+prompt tells it to do before solving anything, and again whenever it hits a
+blocker.
 
-**Pulled on demand, after that** — nothing re-injects. Mid-session, the vault
-reaches the agent only when it runs `ai-mem-search` itself, which it does
-because the launch prompt tells it to before solving a problem.
+So: a reference library the agent is told to consult, not a memory it thinks
+with. Two consequences — launch a bare `claude` instead of `claude-start` and
+you get **no vault context at all**, and whether it helps mid-build depends on
+the agent actually searching.
 
-So it is a reference library the agent is instructed to consult, not a memory
-it thinks with continuously. Two consequences worth knowing up front:
+### Mirrored notes are not injected twice
 
-- Launch a bare `claude` instead of `claude-start` and you get **no vault
-  context at all**. There is no daemon and no hook backstopping it.
-- Whether it helps mid-build comes down to whether the agent actually
-  searches. The lesson index exists precisely because an agent cannot search
-  for knowledge it does not know it has.
+`_Standards.md` ships declaring `mirror_of: _Global_Profile.md`. The launch
+prompt reads both, so injecting both in full restates text the model just
+read.
+
+When a note declares `mirror_of:`, only the differing lines are injected,
+under a marker naming what was elided. On a real vault, 72 of the mirror's 80
+unique lines were verbatim duplicates: **launch prompt 7,200 → 4,300 tokens,
+nothing lost.**
+
+Matching is exact and line-by-line, so anything reworded survives. It fails
+**open** — no frontmatter, a missing source, or an empty diff all inject the
+note in full. Injecting twice costs tokens; dropping a note costs the agent
+context it was promised.
 
 ### Lessons are indexed, not injected
 
-`ai-lesson` writes to `_lessons/<topic-slug>.md`, and those entries are the
-most reusable thing in the vault -- they are the only notes that are true
-across projects. They are also the hardest for an agent to find, because
-finding one by search means guessing a term for knowledge it does not know
-it has.
-
-So the launch prompt lists **every lesson slug and no lesson bodies**:
+`_lessons/` entries are the only notes true across projects, and the hardest
+to find — searching for one means guessing a term for knowledge you don't
+know you have. So the launch prompt lists **every lesson slug and no bodies**:
 
 ```text
-- Lessons already recorded (96), listed by topic slug only -- the bodies are NOT
-  included here. If one looks relevant to the task at hand, read it with
-  `ai-mem-search <slug>` before solving the problem again from scratch.
-  prisma-connection-pool-exhaustion, decimal-money-precision-js, react-hydration-mismatch, ...
+- Lessons already recorded (96), listed by topic slug only. If one looks
+  relevant, read it with `ai-mem-search <slug>` before solving again.
+  prisma-connection-pool-exhaustion, decimal-money-precision-js, ...
 ```
 
-A slug is the lesson already compressed: `prisma-connection-pool-exhaustion`
-tells you whether to open it without opening it. That is the trade -- roughly
-8 tokens per lesson to convert a blind guess into a precise search. 96
-lessons cost about 830 tokens.
+A slug is the lesson compressed: `prisma-connection-pool-exhaustion` tells
+you whether to open it without opening it. ~8 tokens each; 96 lessons cost
+~830.
 
-Newest first, capped at `AI_MEM_LESSON_INDEX_LIMIT` (200), with a `+N older`
-note when it truncates. The cap is not decoration: past a few hundred
-entries, most titles are irrelevant to any given session, and a long tail of
-near-miss titles is the most damaging kind of distractor for a model -- the
-same reason `ai-mem-search` bounds its own output. A vault with no lessons
-adds nothing to the prompt at all.
+Newest first, capped at `AI_MEM_LESSON_INDEX_LIMIT` (200). The cap matters —
+past a few hundred, most titles are irrelevant to any given session, and a
+long tail of near-misses is the most damaging kind of distractor for a model.
 
-### What it deliberately is not
-
-Substring matching, not word matching: `git` also hits `github` and
-`gitignore`. No stemming, no fuzzy matching, no synonyms, no relevance
-ranking, no vector search. A term you half-remember will miss.
-
-That is a real limit, and the way around it is the search strategy rather
-than the search engine: **start broad and narrow down.** A first query that is
-too specific is the usual way to miss what you were looking for. Search
-`postgres` before `postgres connection pool timeout`, then add the project
-argument once you can see roughly where the answer lives.
-
-Returns non-zero on no matches, a missing term, or an unknown project, so it
-composes in a script.
-
+Returns non-zero on no matches, a missing term, or an unknown project, so
+it composes in a script.
 
 ## Session skills (optional)
 
@@ -685,58 +545,40 @@ are sanitized placeholders.
 
 ## Open Knowledge Format
 
-[Open Knowledge Format](https://github.com/GoogleCloudPlatform/open-knowledge-format)
-(OKF) is Google's vendor-neutral spec for portable, agent-readable knowledge.
-An OKF *bundle* is simply a directory tree of markdown files — the unit of
-distribution, shippable as a git repo, tarball, or zip, and readable by any
-agent, static file server, Obsidian, MkDocs, or graph viewer without a
+[OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format) is
+Google's vendor-neutral spec for portable, agent-readable knowledge. A bundle
+is just a directory tree of markdown files — shippable as a repo, tarball or
+zip, readable by any agent, Obsidian, MkDocs or graph viewer without a
 translation layer.
 
-Your vault is one. That is convergence rather than adoption: both bet on
-plain Markdown in a directory tree, in git, with no runtime.
-
-The spec is deliberately small. [It requires no file at the bundle
-root](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
-— `index.md` and `log.md` are optional — and names exactly one required
-frontmatter key: *"`type` is the only always-required key; a concept carrying
-just `type` is fully conformant."*
+Your vault is one, by convergence rather than adoption. The
+[spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+requires no file at the bundle root and exactly one frontmatter key:
+*"`type` is the only always-required key."*
 
 | OKF | Here |
 |---|---|
-| Markdown files in a directory hierarchy | ✅ `_projects/`, `_lessons/`, `_session_logs/`, `_proposals/` |
+| Markdown in a directory hierarchy | ✅ |
 | YAML frontmatter | ✅ every note |
-| **`type` — the only required key** | ✅ `ai-project-context`, `ai-lesson`, `ai-session-log`, `ai-global-profile`, `ai-standards` |
-| Recommended: `title`, `description`, `resource`, `tags` | ⚠️ partial — notes carry their own fields instead |
-| Cross-links as standard markdown links | ⚠️ `[[wikilink]]` instead |
-| `index.md` / `log.md` | optional in the spec; not generated here |
+| **`type` — the only required key** | ✅ `ai-project-context`, `ai-lesson`, `ai-session-log`, … |
+| Recommended `title` / `description` / `tags` | ⚠️ partial |
+| Cross-links as markdown links | ⚠️ `[[wikilink]]` instead |
+| `index.md` / `log.md` | optional in the spec; not generated |
 | No SDK, no account, git-versionable | ✅ |
 
-One real deviation: **links stay Obsidian-style.** The vault is meant to be
-opened in Obsidian, where the graph view and backlinks are much of why anyone
-keeps one, and `ai-mem-search` resolves `[[wikilinks]]` itself. A strict OKF
-consumer would not follow them — though the spec already requires consumers
-to tolerate links that do not resolve.
+One real deviation: **links stay Obsidian-style**, because the graph view and
+backlinks are much of why anyone keeps a vault. No `index.md` is generated —
+`grep` never reads one and a materialized index goes stale on rename.
 
-No `index.md` is generated, and that is a choice rather than a gap: nothing
-here reads one, `grep` does not consult it, and a materialized index is
-exactly the thing that goes stale when a file is renamed. The lesson index is
-built at launch from the directory itself for the same reason.
-
-Session logs predate the `type` field, so a vault that has been in use holds
-notes without it. `ai-mem-lint` counts them, and `ai-mem-lint --fix`
-backfills:
+Session logs predate the `type` field, so a vault in use holds notes without
+it:
 
 ```console
-$ ai-mem-lint
-350 session log(s) missing the `type:` frontmatter field (Open Knowledge Format requires it). Fix with: ai-mem-lint --fix
-
 $ ai-mem-lint --fix
 backfilled `type: ai-session-log` into 350 session log(s)
 ```
 
-It edits in place, preserves existing frontmatter and body, opens a
-frontmatter block for a note that had none, and is idempotent — running it
-twice does not stack a second field.
+Edits in place, preserves frontmatter and body, idempotent.
 
 ## Add another agent
 
@@ -774,56 +616,35 @@ an agent-run command.
 
 ### Graph view
 
-`ai-mem-search` answers a question you already knew to ask. This is for the
-other one — what is in there at all, and which notes turned out to be
-connected.
+`ai-mem-search` answers a question you already knew to ask. This answers the
+other one — what is in there, and what turned out to be connected.
 
-You should not usually have to run this. **Ask the agent** — "open my memory",
-"show me my context" — and it will: the launch prompt tells terminal agents
-the viewer exists, and GUI clients get an `open_graph` tool over MCP. Running
-it by hand stays available:
+Ask the agent ("open my memory") or run it:
 
 ```sh
 ai-mem-serve          # opens a browser at http://127.0.0.1:7777
-ai-mem-serve 8080 --no-open
 ```
-
-Asked twice, the second call finds the first still listening and just opens
-the tab. An agent should not have to check whether it is already running, and
-a port collision with **its own** server is not a failure worth reporting —
-though a port held by something else still is.
 
 ![The vault as a graph: notes coloured by type, a lesson selected, its linked project highlighted](assets/graph-view.png)
 
-Nothing here is a separate database. The vault is already a graph — notes
-carrying a `type` in frontmatter with `[[wikilinks]]` between them — so this
-only draws what is on disk.
+Nodes are coloured by `type` and sized by how many notes link to them.
+Selecting one dims everything unconnected and renders the note beside the
+graph. *Durable knowledge* is the default view — session logs usually
+outnumber everything else and bury the rest.
 
-- **Nodes are coloured by `type`** and sized by how many notes link to them, so
-  a project that has accumulated forty sessions looks like the hub it is.
-- **Selecting a note** dims everything it is not connected to, shows the note
-  rendered beside the graph, and lists what it links to.
-- **Durable knowledge** is the default view. Session logs usually outnumber
-  everything else several times over and all point at their project, which
-  buries the projects and lessons inside a hairball. Switch to *Everything* to
-  see them.
-- **Search** and the legend both filter; `/` focuses the search box.
-
-Bound to `127.0.0.1` only, deliberately. The vault holds project history and
-operational detail, and a viewer for it has no business being reachable from
-the network. Zero dependencies — the layout is a small force simulation rather
-than a charting library, so it works with no network at all.
+Loopback only, deliberately: the vault holds project history. Zero
+dependencies — the layout is a small force simulation, not a charting
+library, so it works offline. Run it twice and the second call just opens the
+tab, unless another vault holds the port.
 
 ### GUI clients (MCP)
 
-The `*-start` launchers reach an agent by injecting the vault into its opening
-prompt. **A GUI opened from the Dock never runs one** — there is no daemon and
-no background service, so Claude Desktop and the Cursor GUI would otherwise
-see nothing.
-
-`ai-mem-mcp` is the channel for those. Register it once:
+The launchers reach an agent through its opening prompt. **A GUI opened from
+the Dock never runs one**, so Claude Desktop and the Cursor GUI would see
+nothing. `ai-mem-mcp` is their channel.
 
 **Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`
+(**Cursor** — `~/.cursor/mcp.json`, same shape):
 
 ```json
 {
@@ -836,37 +657,19 @@ see nothing.
 }
 ```
 
-**Cursor** — `~/.cursor/mcp.json`, same shape.
-
 Six tools, read **and** write, so a GUI session is not a dead end:
-`search_memory`, `get_context`, `read_note`, `add_note`, `add_lesson`, and
-`open_graph` (which launches the [graph view](#graph-view) for them). Each
-shells out to the same zsh functions the CLI uses, so there is one
-implementation of the rules rather than a copy that drifts -- a note written
-from Claude Desktop is committed and pushed exactly like one written in a
-terminal, and is findable by the next session either way.
+`search_memory`, `get_context`, `read_note`, `add_note`, `add_lesson`,
+`open_graph`. Each shells out to the same zsh functions the CLI uses — one
+implementation, not a copy that drifts. A note written from Claude Desktop is
+committed and pushed exactly like one written in a terminal.
 
-`read_note` compares resolved real paths and refuses anything outside the
-vault.
-
-**Making a GUI behave like a launcher.** In a terminal the vault is pushed
-into the agent's opening prompt. Over MCP nothing is pushed, and a model with
-no reason to suspect a memory exists will simply never call a tool. The server
-returns MCP's `instructions` field at startup -- a short standing brief to read
-context first, search before solving, and write back afterwards. That one
-field is the difference between a vault the GUI *could* reach and one it
-actually uses.
-
-**On cost.** Tool schemas are re-sent every turn, so their prose is a
-recurring tax; the `instructions` brief is sent once. Behaviour guidance
-therefore lives in `instructions` and the descriptions stay terse. Adding the
-write tools cost nothing per turn as a result: six tools now total ~429
-tokens against ~380 for the original four, with a one-time ~227 for the brief.
+MCP's `instructions` field carries a standing brief (read context first,
+search before solving, write back after) — without it a model has no reason
+to suspect a memory exists. Tool descriptions stay terse because schemas are
+re-sent every turn: six tools cost ~429 tokens/turn, the brief ~290 once.
 
 **Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
-opencode all have a shell and should call `ai-mem-search` directly; wrapping a
-CLI the agent can already run just adds a layer that can go out of date. MCP
-earns its place only where the client has no shell.
+opencode have a shell and should call `ai-mem-search` directly.
 
 ### Claude Code hooks
 The files live in `hooks/claude/`. Record repo `HEAD` at session start, then on
@@ -907,7 +710,8 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_AGENTS` | `claude codex gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
-| `AI_MEM_SEARCH_LIMIT` | `40` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
+| `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
+| `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
 
 ## Why plain files
 
