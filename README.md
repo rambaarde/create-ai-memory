@@ -178,6 +178,8 @@ off last time.
 
 **Project**
 
+- [Why not just CLAUDE.md?](#why-not-just-claudemd)
+- [Troubleshooting](#troubleshooting)
 - [Why plain files](#why-plain-files)
 - [Tests](#tests)
 - [FAQ](#faq)
@@ -717,6 +719,56 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
 | `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
+
+## Why not just CLAUDE.md?
+
+You probably already have one. Keep it — this does a different job, and the
+tool defers to it by design.
+
+| | `CLAUDE.md` / `AGENTS.md` | create-ai-memory |
+|---|---|---|
+| Holds | rules and conventions | what happened, decided, and broke |
+| Changes | when you edit it | every session, automatically |
+| Scope | that one repo | global + per-repo + cross-project lessons |
+| Agents | one vendor's file per agent | one vault, five CLIs |
+| Answers | *"how should you work here?"* | *"what did we already try?"* |
+
+A `CLAUDE.md` is a standing instruction. It does not know that last Tuesday
+you found the connection pool was sized below the worker count, or that the
+same bug bit a different repo in March. That is what accumulates here.
+
+They compose: the injected profile explicitly tells the agent that repo-local
+instruction files **override it** for that repo. Nothing to migrate, nothing
+to delete.
+
+## Troubleshooting
+
+**`claude-start` works but the agent has no memory of anything.**
+You launched plain `claude`. Nothing hooks it — the vault reaches the agent
+through the launcher's opening prompt, so a bare CLI gets none of it.
+
+**A command "isn't installed" right after an upgrade.**
+Your shell is stale. These are zsh functions loaded when the terminal opened;
+editing or upgrading the module changes nothing in a shell already running.
+Open a new terminal, or `exec zsh`. `which` under bash will not find them
+either — use `command -v`.
+
+**The agent's "Project context" is bracket placeholders.**
+The project note was never filled in. The launch prompt now says so and asks
+the agent to fill it from the repo; you can also edit
+`_projects/<repo>.md` yourself. It is read at every launch for that repo, so
+it is worth ten minutes once.
+
+**`ai-mem-lint` reports orphaned session logs.**
+Their `project:` frontmatter is not a `[[wikilink]]`, usually because the
+vault's session template predates the current one. Scaffolding only fills in
+*missing* files, so an existing vault keeps its old templates. Run
+`ai-mem-lint --fix`.
+
+**Search returns nothing for a term you are sure you wrote.**
+Matching is literal substring with no fuzzy matching, so a typo finds zero.
+Search one distinctive word rather than a phrase or a whole error line — see
+[what it costs](#what-it-costs-and-what-it-cannot-do).
 
 ## Why plain files
 
