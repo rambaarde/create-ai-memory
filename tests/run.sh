@@ -586,15 +586,19 @@ MCP_IN="$(mktemp)"
   print -r -- '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"zzz-absent"}}}'
   print -r -- '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"read_note","arguments":{"path":"../../../etc/passwd"}}}'
   print -r -- '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"read_note","arguments":{"path":"_lessons/mcp-probe.md"}}}'
-  print -r -- '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"list_lessons","arguments":{}}}'
+  print -r -- '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"add_note","arguments":{"text":"written by a GUI client"}}}'
   print -r -- '{"jsonrpc":"2.0","id":8,"method":"bogus/method"}'
+  print -r -- '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"add_lesson","arguments":{"topic":"mcp-probe-lesson","problem":"p","solution":"s"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"add_lesson","arguments":{"topic":"only-a-topic"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"written by a GUI client"}}}'
 } > "$MCP_IN"
 
 MCP_OUT="$(mktemp)"
-AI_MEM_ROOT="$MCPVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" < "$MCP_IN" 2>/dev/null > "$MCP_OUT"
+# Run from inside a git repo so project resolution has something to resolve.
+( cd "$WORK" && AI_MEM_ROOT="$MCPVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" < "$MCP_IN" 2>/dev/null > "$MCP_OUT" )
 
 # Every reply must be one line of valid JSON, and a notification must get none.
-is "$(wc -l < "$MCP_OUT" | tr -d ' ')" "8" "MCP server answers every request and never answers a notification"
+is "$(wc -l < "$MCP_OUT" | tr -d ' ')" "11" "MCP server answers every request and never answers a notification"
 if node -e 'require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").forEach(l=>JSON.parse(l))' "$MCP_OUT" 2>/dev/null; then
   ok "MCP server emits one valid JSON object per line"
 else
@@ -610,7 +614,7 @@ mcpfield() { node -e '
   else if(process.argv[3]==="error") process.stdout.write(m.error?m.error.message:"");
 ' "$MCP_OUT" "$1" "$2"; }
 
-is "$(mcpfield 2 tools)" "get_context,list_lessons,read_note,search_memory" "MCP server advertises its four tools"
+is "$(mcpfield 2 tools)" "add_lesson,add_note,get_context,read_note,search_memory" "MCP server advertises its read and write tools"
 has "$(mcpfield 3 text)" "needle" "MCP search reaches the vault's contents"
 
 # "no matches" is an answer, not a transport fault: the model must see it and
@@ -622,8 +626,34 @@ is  "$(mcpfield 4 isError)" "false"    "MCP search does not flag an empty result
 is  "$(mcpfield 5 isError)" "true"     "MCP read_note refuses a path escaping the vault"
 has "$(mcpfield 5 text)" "not inside the vault" "MCP read_note says why it refused"
 has "$(mcpfield 6 text)" "vault holds a needle" "MCP read_note reads a note by vault-relative path"
-has "$(mcpfield 7 text)" "mcp-probe"   "MCP list_lessons names the recorded lessons"
 has "$(mcpfield 8 error)" "method not found" "MCP server rejects an unknown method as a JSON-RPC error"
+
+# A GUI that can only read leaves nothing behind, so the next session starts
+# cold. These prove the write path actually reaches the vault, not just that
+# the tool returns success.
+is  "$(mcpfield 7 isError)" "false" "MCP add_note succeeds"
+is  "$(mcpfield 9 isError)" "false" "MCP add_lesson succeeds"
+is  "$(mcpfield 10 isError)" "true" "MCP add_lesson refuses a call missing problem and solution"
+if grep -rq "written by a GUI client" "$MCPVAULT/_session_logs" 2>/dev/null; then
+  ok "MCP add_note lands in the session log on disk"
+else
+  nok "MCP add_note lands in the session log on disk"
+fi
+exists "$MCPVAULT/_lessons/mcp-probe-lesson.md" "MCP add_lesson creates the cross-project lesson file"
+# The round trip is the point: what a GUI writes must be findable afterwards.
+has "$(mcpfield 11 text)" "match(es)" "what a GUI writes is immediately findable by search"
+
+# instructions is how a GUI learns the vault exists at all. Without it a model
+# has no reason to call any of these tools.
+if node -e '
+  const ls=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse);
+  const i=ls.find(x=>x.id==1).result.instructions || "";
+  process.exit(/get_context/.test(i) && /search_memory/.test(i) && /add_lesson/.test(i) ? 0 : 1);
+' "$MCP_OUT"; then
+  ok "MCP initialize returns instructions naming the read-first and write-back tools"
+else
+  nok "MCP initialize returns instructions naming the read-first and write-back tools"
+fi
 
 # --- Open Knowledge Format: every note declares a `type` -----------------------
 # OKF names exactly one required frontmatter field. Every shipped template

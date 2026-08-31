@@ -714,12 +714,29 @@ see nothing.
 
 **Cursor** — `~/.cursor/mcp.json`, same shape.
 
-Four tools: `search_memory` (the same search, optionally scoped to a project),
-`get_context` (the block the launchers inject), `read_note`, and
-`list_lessons`. Each one shells out to the same zsh functions the CLI uses, so
-there is one implementation of the rules rather than a copy that drifts.
+Five tools, read **and** write, so a GUI session is not a dead end:
+`search_memory`, `get_context`, `read_note`, `add_note`, `add_lesson`. Each
+shells out to the same zsh functions the CLI uses, so there is one
+implementation of the rules rather than a copy that drifts -- a note written
+from Claude Desktop is committed and pushed exactly like one written in a
+terminal, and is findable by the next session either way.
+
 `read_note` compares resolved real paths and refuses anything outside the
 vault.
+
+**Making a GUI behave like a launcher.** In a terminal the vault is pushed
+into the agent's opening prompt. Over MCP nothing is pushed, and a model with
+no reason to suspect a memory exists will simply never call a tool. The server
+returns MCP's `instructions` field at startup -- a short standing brief to read
+context first, search before solving, and write back afterwards. That one
+field is the difference between a vault the GUI *could* reach and one it
+actually uses.
+
+**On cost.** Tool schemas are re-sent every turn, so their prose is a
+recurring tax; the `instructions` brief is sent once. Behaviour guidance
+therefore lives in `instructions` and the descriptions stay terse. Adding the
+two write tools cost nothing per turn as a result: five tools now total ~379
+tokens against ~380 for the original four, with a one-time ~205 for the brief.
 
 **Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
 opencode all have a shell and should call `ai-mem-search` directly; wrapping a
