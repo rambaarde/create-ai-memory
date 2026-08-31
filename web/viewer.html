@@ -600,10 +600,15 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
    the vault actually contains -- headings, lists, tables, fences, wikilinks --
    rather than the whole spec. */
 function md(src) {
+  // Fences are lifted out and replaced by a sentinel, then restored at the
+  // end. The sentinel is U+E000, a private-use character that cannot occur in
+  // real note content. It used to be a NUL byte, which worked in JavaScript
+  // but made this file binary to file(1) and grep -- grep silently matched
+  // nothing in it, in a project whose whole pitch is plain files you can grep.
   const fences = [];
   src = src.replace(/```[\s\S]*?```/g, (m) => {
     fences.push('<pre><code>' + esc(m.replace(/^```[^\n]*\n?/, '').replace(/```$/, '')) + '</code></pre>');
-    return ' FENCE' + (fences.length - 1) + ' ';
+    return 'FENCE' + (fences.length - 1) + '';
   });
 
   const inline = (s) => esc(s)
@@ -657,7 +662,7 @@ function md(src) {
     para.push(line.trim());
   }
   flushAll();
-  return out.join('\n').replace(/ FENCE(\d+) /g, (_, i) => fences[i]);
+  return out.join('\n').replace(/FENCE(\d+)/g, (_, i) => fences[i]);
 }
 
 load().catch(() => { $('#hint').textContent = 'Could not reach the vault server.'; });
