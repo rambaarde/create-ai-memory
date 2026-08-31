@@ -4,7 +4,8 @@
   "description": "Persistent, agent-agnostic session memory for AI coding CLIs (Claude Code, Codex, Gemini, Cursor, opencode). One Markdown vault, any agent.",
   "bin": {
     "create-ai-memory": "bin/create-ai-memory.js",
-    "ai-mem-mcp": "bin/ai-mem-mcp.js"
+    "ai-mem-mcp": "bin/ai-mem-mcp.js",
+    "ai-mem-serve": "bin/ai-mem-serve.js"
   },
   "scripts": {
     "test": "zsh tests/run.sh",
@@ -17,6 +18,7 @@
   "files": [
     "bin/",
     "shell/",
+    "web/",
     "hooks/",
     "vault-template/",
     "install.sh",

@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Memory</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='4' cy='5' r='2.4' fill='%232563eb'/%3E%3Ccircle cx='12' cy='4' r='1.8' fill='%230d9488'/%3E%3Ccircle cx='9' cy='12' r='2' fill='%23b45309'/%3E%3C/svg%3E">
+<style>
+/* One palette, named. Light is the default because the graph reads as ink on
+   paper; dark mirrors it rather than inverting the node colours, which would
+   make types unrecognisable between themes. */
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --line: #e6e2db;
+  --line-strong: #d3cec5;
+  --ink: #1c1b19;
+  --ink-2: #55514b;
+  --ink-3: #8a857d;
+  --accent: #b45309;
+  --edge: #cfcac2;
+  --shadow: 0 1px 2px rgba(28,27,25,.05), 0 8px 24px rgba(28,27,25,.06);
+  --radius: 8px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16151a;
+    --surface: #1d1c22;
+    --line: #2c2a33;
+    --line-strong: #3a3743;
+    --ink: #ecebe8;
+    --ink-2: #a8a49d;
+    --ink-3: #736f68;
+    --accent: #f59e0b;
+    --edge: #3a3743;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- shell ---------------------------------------------------------- */
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+header {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; margin-right: auto; }
+.brand h1 { font-size: 14px; font-weight: 620; margin: 0; letter-spacing: -.01em; }
+.brand span { font-size: 11px; color: var(--ink-3); }
+
+.control {
+  font: inherit; font-size: 12px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line-strong);
+  border-radius: 6px; padding: 5px 8px; min-width: 0;
+}
+.control:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+#q { width: 200px; }
+button.control { cursor: pointer; }
+button.control:hover { background: var(--surface); border-color: var(--ink-3); }
+
+/* ---- panes ---------------------------------------------------------- */
+main { display: flex; flex: 1; min-height: 0; }
+#graphwrap { position: relative; flex: 1; min-width: 0; }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+canvas.dragging { cursor: grabbing; }
+
+#legend {
+  position: absolute; left: 12px; bottom: 12px;
+  display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 24px);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(6px); font-size: 11px; color: var(--ink-2);
+}
+#legend b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
+#legend i { font-style: normal; cursor: pointer; white-space: nowrap; }
+#legend i[aria-pressed="false"] { opacity: .35; text-decoration: line-through; }
+
+#hint {
+  position: absolute; inset: 0; display: grid; place-content: center;
+  color: var(--ink-3); font-size: 13px; pointer-events: none; text-align: center; padding: 24px;
+}
+
+/* ---- detail --------------------------------------------------------- */
+#panel {
+  width: 40%; max-width: 560px; min-width: 320px;
+  border-left: 1px solid var(--line); background: var(--surface);
+  overflow-y: auto; overscroll-behavior: contain;
+}
+#panel[hidden] { display: none; }
+.pad { padding: 18px 20px; }
+
+.phead { display: flex; gap: 12px; align-items: flex-start; }
+.badge {
+  flex: none; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 4px; color: var(--surface); font-weight: 600;
+}
+.ptitle { font-size: 17px; font-weight: 620; line-height: 1.3; margin: 0; letter-spacing: -.01em; flex: 1; }
+.ppath { font: 11px/1.5 var(--mono); color: var(--ink-3); word-break: break-all; margin-top: 6px; }
+#close {
+  flex: none; border: 0; background: none; color: var(--ink-3); cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+#close:hover { color: var(--ink); background: var(--bg); }
+
+.fields { margin: 14px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 12px; }
+.fields dt { color: var(--ink-3); }
+.fields dd { margin: 0; color: var(--ink-2); }
+.tag {
+  display: inline-block; font-size: 11px; padding: 2px 7px; margin: 0 4px 4px 0;
+  border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-2);
+}
+
+hr.rule { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+
+/* Rendered note body. Sized down slightly from the chrome so a long note
+   stays readable in a narrow column without the panel feeling like an app. */
+.body { font-size: 13.5px; line-height: 1.62; color: var(--ink-2); }
+.body h1, .body h2, .body h3 { color: var(--ink); line-height: 1.3; margin: 20px 0 8px; letter-spacing: -.01em; }
+.body h1 { font-size: 17px; } .body h2 { font-size: 15px; } .body h3 { font-size: 13.5px; }
+.body h1:first-child, .body h2:first-child { margin-top: 0; }
+.body p, .body ul, .body ol { margin: 0 0 10px; }
+.body ul, .body ol { padding-left: 20px; }
+.body li { margin-bottom: 3px; }
+.body code { font: 12px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); padding: 1px 4px; border-radius: 4px; }
+.body pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+.body pre code { background: none; border: 0; padding: 0; }
+.body blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 2px solid var(--line-strong); color: var(--ink-3); }
+.body a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.body strong { color: var(--ink); font-weight: 620; }
+.body hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+.tablewrap { overflow-x: auto; margin-bottom: 10px; }
+.body table { border-collapse: collapse; font-size: 12.5px; }
+.body th, .body td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; }
+.body th { background: var(--bg); color: var(--ink); font-weight: 600; }
+.wikilink { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.wikilink.dead { color: var(--ink-3); cursor: default; text-decoration-style: dotted; }
+
+.links { margin-top: 4px; }
+.links h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin: 0 0 8px; font-weight: 600; }
+.links button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 12.5px;
+  background: none; border: 0; border-radius: 5px; padding: 5px 7px; margin-left: -7px;
+  color: var(--ink-2); cursor: pointer;
+}
+.links button:hover { background: var(--bg); color: var(--ink); }
+.links button b { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; }
+
+/* Below the split point the graph and the note stop competing for width:
+   the note becomes a sheet over the graph rather than a squeezed column. */
+@media (max-width: 768px) {
+  main { position: relative; }
+  #panel {
+    position: absolute; inset: auto 0 0 0; width: 100%; max-width: none; min-width: 0;
+    height: 62%; border-left: 0; border-top: 1px solid var(--line-strong);
+    border-radius: 12px 12px 0 0; box-shadow: var(--shadow);
+  }
+  #q { width: 100%; order: 3; }
+  .brand { width: 100%; }
+  #legend { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><h1>AI Memory</h1><span id="sub">loading…</span></div>
+    <input id="q" class="control" type="search" placeholder="Search title, path or tag" autocomplete="off">
+    <select id="scope" class="control" title="Which notes to draw">
+      <option value="durable">Durable knowledge</option>
+      <option value="all">Everything</option>
+    </select>
+    <button id="reset" class="control" type="button">Reset view</button>
+  </header>
+
+  <main>
+    <div id="graphwrap">
+      <canvas id="c"></canvas>
+      <div id="hint">Loading the vault…</div>
+      <div id="legend"></div>
+    </div>
+    <aside id="panel" hidden><div class="pad" id="panelbody"></div></aside>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+/* Colour by `type`, the one field OKF requires, so the graph is coloured by
+   the vault's own vocabulary rather than by anything invented here. Types the
+   palette does not name fall through to a neutral -- a vault with its own
+   types still renders, just without bespoke colours. */
+const TYPE_COLOR = {
+  'ai-lesson':          '#0d9488',
+  'ai-project-context': '#2563eb',
+  'ai-session-log':     '#8b8681',
+  'ai-global-profile':  '#b45309',
+  'ai-standards':       '#b45309',
+  'proposal':           '#7c3aed',
+  'untyped':            '#a8a29a',
+};
+const colorFor = (t) => TYPE_COLOR[t] || '#6b7280';
+
+/* Session logs outnumber everything else roughly three to one and all point at
+   their project note, so drawing every one yields a hairball with the durable
+   knowledge buried inside it. "Durable" is the default view and the dropdown
+   says plainly what is being left out.
+   Judged by LOCATION, not by the `type` field. Session logs predate that
+   field, so a vault that has not been backfilled has hundreds of logs typed
+   `untyped` -- filtering on the type alone silently drew all of them. Where a
+   note lives is the fact that is always true. */
+const isTransient = (n) => n.id.startsWith('_session_logs/') || n.type === 'ai-session-log';
+
+const $ = (s) => document.querySelector(s);
+const canvas = $('#c');
+const ctx = canvas.getContext('2d');
+
+let RAW = { nodes: [], edges: [] };
+let nodes = [], edges = [], byId = new Map();
+let view = { x: 0, y: 0, k: 1 };
+let selected = null, hovered = null;
+let alpha = 1, running = false;
+
+/* ---- data ------------------------------------------------------------ */
+async function load() {
+  const g = await (await fetch('/api/graph')).json();
+  RAW = g;
+  $('#sub').textContent = g.nodes.length + ' notes · ' + g.edges.length + ' links';
+  document.title = 'AI Memory · ' + g.nodes.length + ' notes';
+  build();
+}
+
+function build() {
+  const scope = $('#scope').value;
+  const hidden = new Set([...document.querySelectorAll('#legend i[aria-pressed="false"]')].map((e) => e.dataset.type));
+  const keep = RAW.nodes.filter((n) => {
+    if (hidden.has(n.type)) return false;
+    if (scope === 'durable' && isTransient(n)) return false;
+    return true;
+  });
+  const ids = new Set(keep.map((n) => n.id));
+
+  byId = new Map();
+  nodes = keep.map((n) => {
+    const prev = byId.get(n.id);
+    const o = Object.assign({}, n, {
+      x: prev ? prev.x : (Math.random() - 0.5) * 600,
+      y: prev ? prev.y : (Math.random() - 0.5) * 600,
+      vx: 0, vy: 0, deg: 0,
+    });
+    byId.set(n.id, o);
+    return o;
+  });
+  edges = RAW.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+  for (const e of edges) {
+    byId.get(e.source).deg++;
+    byId.get(e.target).deg++;
+  }
+  // Radius by connectedness: a hub should look like one. sqrt keeps a note
+  // with 147 links from swallowing the canvas.
+  for (const n of nodes) n.r = 5 + Math.sqrt(n.deg) * 2.6;
+
+  drawLegend();
+  $('#hint').textContent = nodes.length ? '' : 'Nothing to draw with these filters.';
+  alpha = 1;
+  fitPending = true;
+  if (!running) { running = true; requestAnimationFrame(tick); }
+}
+
+/* The simulation has no idea how big the screen is: left alone it settles to
+   whatever size the forces imply, which on a real vault was roughly 3600px
+   across inside an 850px canvas -- most of the graph off-screen, and the tool
+   looking broken on first load. Frame it once, when it stops moving. */
+let fitPending = false;
+function fitToView() {
+  if (!nodes.length) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of nodes) {
+    x0 = Math.min(x0, n.x - n.r); y0 = Math.min(y0, n.y - n.r);
+    x1 = Math.max(x1, n.x + n.r); y1 = Math.max(y1, n.y + n.r);
+  }
+  const pad = 60;
+  view.k = Math.min(4, Math.max(0.12, Math.min((w - pad) / (x1 - x0 || 1), (h - pad) / (y1 - y0 || 1))));
+  view.x = -((x0 + x1) / 2) * view.k;
+  view.y = -((y0 + y1) / 2) * view.k;
+}
+
+function drawLegend() {
+  const counts = {};
+  for (const n of RAW.nodes) counts[n.type] = (counts[n.type] || 0) + 1;
+  const prev = new Map([...document.querySelectorAll('#legend i')].map((e) => [e.dataset.type, e.getAttribute('aria-pressed')]));
+  $('#legend').innerHTML = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([t, c]) => '<i data-type="' + t + '" role="button" tabindex="0" aria-pressed="' + (prev.get(t) || 'true') +
+      '"><b style="background:' + colorFor(t) + '"></b>' + t + ' ' + c + '</i>').join('');
+}
+
+/* ---- force layout ----------------------------------------------------
+   Hand-rolled rather than pulled from a CDN: the package ships no
+   dependencies, and a local tool that breaks without a network is worse than
+   one with a simpler layout. Repulsion is naive O(n^2), which is fine at this
+   size, and the simulation cools to a stop instead of running forever -- a
+   settled graph you can read beats one that never stops moving. */
+function tick() {
+  if (alpha <= 0.004 && fitPending) { fitPending = false; fitToView(); }
+  if (alpha > 0.004) {
+    alpha *= 0.985;
+    const n = nodes.length;
+    for (let i = 0; i < n; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < n; j++) {
+        const b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 0.01; }
+        if (d2 > 90000) continue;               // ignore distant pairs
+        const f = 900 / d2;
+        const d = Math.sqrt(d2);
+        const fx = (dx / d) * f, fy = (dy / d) * f;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+      a.vx -= a.x * 0.0016;                     // gentle pull to centre
+      a.vy -= a.y * 0.0016;
+    }
+    for (const e of edges) {
+      const a = byId.get(e.source), b = byId.get(e.target);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const f = (d - (60 + a.r + b.r)) * 0.012;
+      const fx = (dx / d) * f, fy = (dy / d) * f;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    }
+    for (const p of nodes) {
+      if (p === dragNode) continue;
+      p.x += (p.vx *= 0.82) * alpha * 2.2;
+      p.y += (p.vy *= 0.82) * alpha * 2.2;
+    }
+  }
+  draw();
+  requestAnimationFrame(tick);
+}
+
+/* ---- rendering -------------------------------------------------------- */
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = r.width * dpr;
+  canvas.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+new ResizeObserver(resize).observe(canvas);
+
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const q = () => $('#q').value.trim().toLowerCase();
+
+function matches(n) {
+  const s = q();
+  if (!s) return true;
+  return (n.title + ' ' + n.id + ' ' + n.tags.join(' ')).toLowerCase().includes(s);
+}
+
+function draw() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(w / 2 + view.x, h / 2 + view.y);
+  ctx.scale(view.k, view.k);
+
+  const searching = q().length > 0;
+  const neighbours = new Set();
+  if (selected) {
+    neighbours.add(selected.id);
+    for (const e of edges) {
+      if (e.source === selected.id) neighbours.add(e.target);
+      if (e.target === selected.id) neighbours.add(e.source);
+    }
+  }
+
+  ctx.lineWidth = 1 / view.k;
+  for (const e of edges) {
+    const a = byId.get(e.source), b = byId.get(e.target);
+    const lit = selected && (e.source === selected.id || e.target === selected.id);
+    ctx.strokeStyle = lit ? css('--accent') : css('--edge');
+    ctx.globalAlpha = lit ? 0.85 : (selected ? 0.2 : 0.55);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  const labelAll = view.k > 1.15;
+  for (const n of nodes) {
+    const hit = matches(n);
+    const dim = (searching && !hit) || (selected && !neighbours.has(n.id));
+    ctx.globalAlpha = dim ? 0.16 : 1;
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+    ctx.fillStyle = colorFor(n.type);
+    ctx.fill();
+
+    if (n === selected || n === hovered) {
+      ctx.strokeStyle = css('--accent');
+      ctx.lineWidth = 2.5 / view.k;
+      ctx.stroke();
+    }
+
+    // Label only what the reader can actually take in: hubs always, the rest
+    // once zoomed, plus anything the search or selection has singled out.
+    if (!dim && (labelAll || n.deg >= 6 || n === selected || n === hovered || (searching && hit))) {
+      ctx.globalAlpha = dim ? 0.16 : 0.95;
+      ctx.font = (11 / view.k) + 'px ' + css('--sans');
+      ctx.textAlign = 'center';
+      const t = n.title.length > 34 ? n.title.slice(0, 33) + '…' : n.title;
+      // Stroke the background colour behind the glyphs first. A hub sits under
+      // its own spokes, and without this its name is unreadable at exactly the
+      // moment it matters most.
+      ctx.lineWidth = 3 / view.k;
+      ctx.strokeStyle = css('--bg');
+      ctx.lineJoin = 'round';
+      ctx.strokeText(t, n.x, n.y + n.r + 12 / view.k);
+      ctx.fillStyle = css('--ink-2');
+      ctx.fillText(t, n.x, n.y + n.r + 12 / view.k);
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/* ---- interaction ------------------------------------------------------ */
+let dragNode = null, panning = false, last = null, moved = false;
+
+const toWorld = (ev) => {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (ev.clientX - r.left - r.width / 2 - view.x) / view.k,
+    y: (ev.clientY - r.top - r.height / 2 - view.y) / view.k,
+  };
+};
+const nodeAt = (p) => {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (Math.hypot(n.x - p.x, n.y - p.y) <= n.r + 4) return n;
+  }
+  return null;
+};
+
+canvas.addEventListener('pointerdown', (ev) => {
+  canvas.setPointerCapture(ev.pointerId);
+  const p = toWorld(ev);
+  moved = false;
+  dragNode = nodeAt(p);
+  if (dragNode) { alpha = Math.max(alpha, 0.35); }
+  else { panning = true; canvas.classList.add('dragging'); }
+  last = { x: ev.clientX, y: ev.clientY };
+});
+canvas.addEventListener('pointermove', (ev) => {
+  const p = toWorld(ev);
+  if (dragNode) { dragNode.x = p.x; dragNode.y = p.y; moved = true; return; }
+  if (panning) {
+    view.x += ev.clientX - last.x;
+    view.y += ev.clientY - last.y;
+    last = { x: ev.clientX, y: ev.clientY };
+    moved = true;
+    return;
+  }
+  const h = nodeAt(p);
+  if (h !== hovered) { hovered = h; canvas.style.cursor = h ? 'pointer' : 'grab'; }
+});
+canvas.addEventListener('pointerup', (ev) => {
+  // A click is a click only if it did not turn into a drag.
+  if (!moved) {
+    const n = nodeAt(toWorld(ev));
+    if (n) open(n); else closePanel();
+  }
+  dragNode = null; panning = false; canvas.classList.remove('dragging');
+});
+canvas.addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const mx = ev.clientX - r.left - r.width / 2, my = ev.clientY - r.top - r.height / 2;
+  const k = Math.min(4, Math.max(0.2, view.k * Math.exp(-ev.deltaY * 0.0015)));
+  // Zoom toward the cursor, so the thing under it stays under it.
+  view.x = mx - ((mx - view.x) / view.k) * k;
+  view.y = my - ((my - view.y) / view.k) * k;
+  view.k = k;
+}, { passive: false });
+
+$('#q').addEventListener('input', () => { $('#hint').textContent = ''; });
+$('#scope').addEventListener('change', build);
+$('#legend').addEventListener('click', (ev) => {
+  const i = ev.target.closest('i');
+  if (!i) return;
+  i.setAttribute('aria-pressed', i.getAttribute('aria-pressed') === 'false' ? 'true' : 'false');
+  build();
+});
+$('#reset').addEventListener('click', () => {
+  $('#q').value = '';
+  closePanel();
+  fitToView();
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') closePanel();
+  if (ev.key === '/' && document.activeElement !== $('#q')) { ev.preventDefault(); $('#q').focus(); }
+});
+
+/* ---- detail panel ----------------------------------------------------- */
+function closePanel() { selected = null; $('#panel').hidden = true; }
+
+/* Pan a selected node back into the visible part of the canvas. Opening the
+   panel covers up to 40% of the width, so a node that was comfortably framed
+   can end up underneath it -- or, as here, clipped by the bottom edge. */
+function bringIntoView(n) {
+  const w = canvas.clientWidth, h = canvas.clientHeight, m = 90;
+  const sx = w / 2 + view.x + n.x * view.k;
+  const sy = h / 2 + view.y + n.y * view.k;
+  if (sx < m) view.x += m - sx;
+  if (sx > w - m) view.x -= sx - (w - m);
+  if (sy < m) view.y += m - sy;
+  if (sy > h - m) view.y -= sy - (h - m);
+}
+
+async function open(n) {
+  selected = n;
+  const panel = $('#panel');
+  panel.hidden = false;
+  panel.scrollTop = 0;
+  const head = '<div class="phead"><span class="badge" style="background:' + colorFor(n.type) + '">' +
+    esc(n.type) + '</span><h2 class="ptitle">' + esc(n.title) + '</h2>' +
+    '<button id="close" type="button" aria-label="Close">&times;</button></div>' +
+    '<div class="ppath">' + esc(n.id) + '</div>';
+  $('#panelbody').innerHTML = head + '<p class="body">Loading…</p>';
+  $('#close').onclick = closePanel;
+  bringIntoView(n);
+
+  let text = '';
+  try {
+    const r = await fetch('/api/note?path=' + encodeURIComponent(n.id));
+    text = r.ok ? (await r.json()).text : 'Could not read this note.';
+  } catch { text = 'Could not read this note.'; }
+  if (selected !== n) return;   // a faster click won
+
+  const linked = [];
+  for (const e of edges) {
+    if (e.source === n.id) linked.push(byId.get(e.target));
+    else if (e.target === n.id) linked.push(byId.get(e.source));
+  }
+
+  let html = '';
+  const fields = [];
+  if (n.description) fields.push(['Description', esc(n.description)]);
+  if (n.resource) fields.push(['Resource', '<a href="' + esc(n.resource) + '" target="_blank" rel="noopener">' + esc(n.resource) + '</a>']);
+  if (n.tags.length) fields.push(['Tags', n.tags.map((t) => '<span class="tag">' + esc(t) + '</span>').join('')]);
+  if (fields.length) {
+    html += '<dl class="fields">' + fields.map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>';
+  }
+  // The title was taken from the note's first H1, so rendering that H1 again
+  // right underneath it just repeats the heading.
+  let body = stripFrontmatter(text).replace(/^\s*#\s+(.+)\n/, (m, h) => (h.trim() === n.title ? '' : m));
+  html += '<hr class="rule"><div class="body">' + md(body) + '</div>';
+  if (linked.length) {
+    html += '<hr class="rule"><div class="links"><h4>' + linked.length + ' linked note' + (linked.length > 1 ? 's' : '') + '</h4>' +
+      linked.map((l) => '<button type="button" data-id="' + esc(l.id) + '"><b style="background:' + colorFor(l.type) + '"></b>' + esc(l.title) + '</button>').join('') +
+      '</div>';
+  }
+  // Replace the whole panel rather than appending: appending left the
+  // "Loading…" placeholder sitting above the note it was standing in for.
+  $('#panelbody').innerHTML = head + html;
+  $('#close').onclick = closePanel;
+}
+
+// One delegated listener, bound once. Binding inside open() added another on
+// every click, so the tenth note opened fired ten handlers.
+$('#panelbody').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-id]');
+  if (b && byId.has(b.dataset.id)) return open(byId.get(b.dataset.id));
+  const wl = ev.target.closest('.wikilink:not(.dead)');
+  if (wl) {
+    const hit = nodes.find((x) => x.id.endsWith('/' + wl.dataset.link + '.md') || x.id === wl.dataset.link + '.md');
+    if (hit) open(hit);
+  }
+});
+
+const stripFrontmatter = (t) => (t.startsWith('---') && t.indexOf('\n---', 3) > -1 ? t.slice(t.indexOf('\n---', 3) + 4) : t);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* A small Markdown renderer. Everything is escaped before any markup is
+   added, so note content can never inject HTML into this page. Covers what
+   the vault actually contains -- headings, lists, tables, fences, wikilinks --
+   rather than the whole spec. */
+function md(src) {
+  const fences = [];
+  src = src.replace(/```[\s\S]*?```/g, (m) => {
+    fences.push('<pre><code>' + esc(m.replace(/^```[^\n]*\n?/, '').replace(/```$/, '')) + '</code></pre>');
+    return ' FENCE' + (fences.length - 1) + ' ';
+  });
+
+  const inline = (s) => esc(s)
+    .replace(/`([^`]+)`/g, (_, c) => '<code>' + c + '</code>')
+    .replace(/\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g, (_, t, label) => {
+      const target = t.trim();
+      const known = nodes.some((x) => x.id.endsWith('/' + target + '.md') || x.id === target + '.md');
+      return '<span class="wikilink' + (known ? '' : ' dead') + '" data-link="' + esc(target) + '">' + esc(label || target) + '</span>';
+    })
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|\W)\*([^*\n]+)\*/g, '$1<em>$2</em>');
+
+  const out = [];
+  const lines = src.split('\n');
+  let list = null, para = [], table = null;
+  const flushP = () => { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; } };
+  const flushL = () => { if (list) { out.push('</' + list + '>'); list = null; } };
+  const flushT = () => {
+    if (!table) return;
+    const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    const head = cells(table[0]).map((c) => '<th>' + inline(c) + '</th>').join('');
+    const rows = table.slice(2).map((r) => '<tr>' + cells(r).map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('');
+    out.push('<div class="tablewrap"><table><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
+    table = null;
+  };
+  const flushAll = () => { flushP(); flushL(); flushT(); };
+
+  for (const line of lines) {
+    if (table !== null) {
+      if (/\|/.test(line)) { table.push(line); continue; }
+      flushT();
+    }
+    if (/^\s*\|.*\|\s*$/.test(line)) { flushP(); flushL(); table = [line]; continue; }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { flushAll(); out.push('<h' + Math.min(h[1].length, 3) + '>' + inline(h[2]) + '</h' + Math.min(h[1].length, 3) + '>'); continue; }
+    if (/^\s*(---|\*\*\*|___)\s*$/.test(line)) { flushAll(); out.push('<hr>'); continue; }
+    if (/^\s*>\s?/.test(line)) { flushAll(); out.push('<blockquote>' + inline(line.replace(/^\s*>\s?/, '')) + '</blockquote>'); continue; }
+
+    const li = line.match(/^\s*([-*+]|\d+\.)\s+(.*)$/);
+    if (li) {
+      flushP();
+      const want = /\d/.test(li[1]) ? 'ol' : 'ul';
+      if (list !== want) { flushL(); out.push('<' + want + '>'); list = want; }
+      out.push('<li>' + inline(li[2]) + '</li>');
+      continue;
+    }
+    if (!line.trim()) { flushAll(); continue; }
+    flushL();
+    para.push(line.trim());
+  }
+  flushAll();
+  return out.join('\n').replace(/ FENCE(\d+) /g, (_, i) => fences[i]);
+}
+
+load().catch(() => { $('#hint').textContent = 'Could not reach the vault server.'; });
+</script>
+</body>
+</html>
