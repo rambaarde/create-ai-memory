@@ -19,17 +19,26 @@
  *
  * Zero dependencies, like the rest of the package.
  *
- * Usage:  ai-mem-serve [port]
+ * Usage:  ai-mem-serve [port] [--no-open]
+ *
+ * Opens a browser at the URL by default, and is idempotent: asked twice, the
+ * second call finds the first still listening and just opens the tab. The
+ * usual caller is an agent acting on "open my memory", which should not have
+ * to check whether it is already running, nor report a port collision as a
+ * failure.
  */
 'use strict';
 
 const http = require('node:http');
+const { spawn } = require('node:child_process');
 const { readFileSync, readdirSync, statSync, existsSync, realpathSync } = require('node:fs');
 const { join, resolve, relative, basename, extname } = require('node:path');
 const { homedir } = require('node:os');
 
 const VAULT = process.env.AI_MEM_ROOT || join(homedir(), '.ai-memory', '_Ai_Memory');
-const PORT = Number(process.argv[2] || process.env.AI_MEM_PORT || 7777);
+const ARGS = process.argv.slice(2);
+const NO_OPEN = ARGS.includes('--no-open');
+const PORT = Number(ARGS.find((a) => /^\d+$/.test(a)) || process.env.AI_MEM_PORT || 7777);
 const VIEWER = join(__dirname, '..', 'web', 'viewer.html');
 
 /** Recursively collect every .md file in the vault, skipping dotfiles and templates. */
@@ -179,9 +188,53 @@ if (!existsSync(VAULT)) {
   process.exit(1);
 }
 
+/**
+ * Hand the URL to the desktop. Failure is ignored on purpose: a headless box
+ * or a locked-down desktop has no opener, and that is not a reason for the
+ * server itself to fail -- the URL is printed either way.
+ */
+function openBrowser(url) {
+  if (NO_OPEN) return;
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  try {
+    spawn(cmd, [url], { stdio: 'ignore', detached: true, shell: process.platform === 'win32' }).unref();
+  } catch {
+    /* no opener; the printed URL is the fallback */
+  }
+}
+
 // Loopback only, deliberately. See the header note.
 server.listen(PORT, '127.0.0.1', () => {
   const g = buildGraph();
+  const url = 'http://127.0.0.1:' + server.address().port;
   console.log('ai-mem-serve: ' + g.nodes.length + ' notes, ' + g.edges.length + ' links');
-  console.log('  http://127.0.0.1:' + server.address().port);
+  console.log('  ' + url);
+  openBrowser(url);
+});
+
+/**
+ * A port already in use is the expected case, not an error: it almost always
+ * means a previous "open my memory" is still serving. Confirm it is this
+ * server rather than something unrelated, then open the tab and exit clean.
+ * Reporting EADDRINUSE would make an agent believe the request failed.
+ */
+server.on('error', (err) => {
+  if (err.code !== 'EADDRINUSE') {
+    console.error('ai-mem-serve: ' + err.message);
+    process.exit(1);
+  }
+  const url = 'http://127.0.0.1:' + PORT;
+  http.get(url + '/api/graph', (res) => {
+    if (res.statusCode !== 200) return bail();
+    res.resume();
+    console.log('ai-mem-serve: already running');
+    console.log('  ' + url);
+    openBrowser(url);
+    process.exit(0);
+  }).on('error', bail);
+
+  function bail() {
+    console.error('ai-mem-serve: port ' + PORT + ' is in use by something else. Pass a different port.');
+    process.exit(1);
+  }
 });
