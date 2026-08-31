@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.2](https://github.com/rambaarde/create-ai-memory/compare/v0.14.1...v0.14.2) (2026-08-31)
+
+
+### Bug Fixes
+
+* **serve:** title notes by what distinguishes them, and never attach to the wrong vault ([6e46792](https://github.com/rambaarde/create-ai-memory/commit/6e467925a330063045699b0851c7214605145804))
+* **serve:** title notes by what distinguishes them, and never attach to the wrong vault ([a338841](https://github.com/rambaarde/create-ai-memory/commit/a3388410ddfeefd9fc5d838ac92c9c3c63498cfb))
+* **serve:** title notes by what distinguishes them, and never attach to the wrong vault ([b9b6989](https://github.com/rambaarde/create-ai-memory/commit/b9b6989bbe5163fcd9e1bf804f7655180b825657))
+
 ## [0.14.1](https://github.com/rambaarde/create-ai-memory/compare/v0.14.0...v0.14.1) (2026-08-31)
 
 
