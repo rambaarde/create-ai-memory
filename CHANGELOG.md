@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.4](https://github.com/rambaarde/create-ai-memory/compare/v0.14.3...v0.14.4) (2026-08-31)
+
+
+### Bug Fixes
+
+* **context:** say when the project note is still blank ([248f416](https://github.com/rambaarde/create-ai-memory/commit/248f41634fbe3b26598da83b68b97520d4085fa6))
+* **context:** say when the project note is still blank ([894e34b](https://github.com/rambaarde/create-ai-memory/commit/894e34b9f6dd9601b4389acef56200c8876c83bc))
+* **context:** say when the project note is still blank ([34d1310](https://github.com/rambaarde/create-ai-memory/commit/34d1310e765286fc68cd960b74cedfc392b8b7dc))
+
 ## [0.14.3](https://github.com/rambaarde/create-ai-memory/compare/v0.14.2...v0.14.3) (2026-08-31)
 
 
