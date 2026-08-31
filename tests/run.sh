@@ -381,6 +381,7 @@ LINTVAULT="$(mktemp -d)"
 mkdir -p "$LINTVAULT/_session_logs/lintproj" "$LINTVAULT/_projects"
 cat > "$LINTVAULT/_session_logs/lintproj/lintproj-2026-08-28_10-00-00.md" <<'EOF'
 ---
+type: ai-session-log
 date: 2026-08-28
 project: "[[lintproj]]"
 previous: ""
@@ -541,6 +542,64 @@ PERF_ELAPSED=$(( $(date +%s) - PERF_START ))
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
+
+# --- Open Knowledge Format: every note declares a `type` -----------------------
+# OKF names exactly one required frontmatter field. Every shipped template
+# declared one except the session log, so a vault in real use accumulates
+# hundreds of non-conforming notes.
+for tmpl in _Global_Profile.md _Standards.md _projects/_project_template.md \
+            _lessons/_lesson_template.md _session_logs/_session_template.md; do
+  if grep -qm1 '^type: ' "$REPO_ROOT/vault-template/$tmpl"; then
+    ok "shipped template declares a type: $tmpl"
+  else
+    nok "shipped template declares a type: $tmpl (missing)"
+  fi
+done
+
+OKFVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$OKFVAULT" "$REPO_ROOT/install.sh" >/dev/null
+NEWLOG="$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$WORK"'"
+  __ai_mem_today_session_log okfproj
+')"
+has "$(<"$NEWLOG")" "type: ai-session-log" "a freshly created session log declares its type"
+
+# A vault predating the field: lint must report it, --fix must repair it.
+LEGACY="$OKFVAULT/_session_logs/okfproj/legacy-2020-01-01_00-00-00.md"
+print -rl -- "---" "date: 2020-01-01" 'project: "[[okfproj]]"' "---" "legacy body" > "$LEGACY"
+LINT_OUT="$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint
+' 2>&1 || true)"
+has "$LINT_OUT" "missing the \`type:\`" "lint reports session logs with no type field"
+has "$LINT_OUT" "ai-mem-lint --fix"      "lint names the command that repairs them"
+
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+has "$(<"$LEGACY")" "type: ai-session-log" "--fix backfills the type field"
+has "$(<"$LEGACY")" "legacy body"          "--fix preserves the note's existing content"
+has "$(<"$LEGACY")" "date: 2020-01-01"     "--fix preserves the note's existing frontmatter"
+is  "$(grep -c '^type: ' "$LEGACY")" "1"   "--fix adds exactly one type field"
+
+# Idempotent: running it twice must not stack a second field.
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+is "$(grep -c '^type: ' "$LEGACY")" "1" "--fix is idempotent, not additive"
+
+# A log with no frontmatter at all gets a whole block, not a stray line.
+BARE="$OKFVAULT/_session_logs/okfproj/bare-2020-01-02_00-00-00.md"
+print -r -- "just a body, no frontmatter" > "$BARE"
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+is "$(head -1 "$BARE")" "---" "--fix opens a frontmatter block when a note had none"
+has "$(<"$BARE")" "just a body" "--fix keeps the body of a note that had no frontmatter"
 
 # --- mirrored notes contribute only what differs ------------------------------
 # _Standards.md ships declaring `mirror_of: _Global_Profile.md`. Injecting both
