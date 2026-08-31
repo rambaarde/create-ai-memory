@@ -337,7 +337,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
-| `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 40) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
+| `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 25) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
 | `ai-mem-serve [port] [--no-open]` | Open the vault as a browsable graph on `127.0.0.1`. Agents run this for you when you ask to see your memory (see [Graph view](#graph-view)) |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
@@ -359,7 +359,7 @@ flowchart TD
     D --> E
     E -->|"found nothing"| F["<b>Says so, plainly.</b><br/>Never a blank screen you<br/>could mistake for 'none exist'"]
     E -->|"found something"| G["Newest first"]
-    G --> H["Show the first 40<br/>and say how many more there are"]
+    G --> H["Show a few from each note<br/>and say how many more there are"]
     H --> I["Follow any linked note one step,<br/>with a one-line summary of it"]
     I --> J(["What you read"])
 
@@ -409,7 +409,7 @@ notes) sort last.
 
 **Bounded output.** The count comes first, before the results -- you need the
 size of the result set to interpret it. Then at most `AI_MEM_SEARCH_LIMIT`
-lines (default 40), and if anything was withheld, an explicit `N hidden` line
+lines (default 25), and if anything was withheld, an explicit `N hidden` line
 with the command to narrow. This is for the agent, not for you: an unbounded
 dump of a common term ran ~29k tokens, overflowed the host's tool-response
 cap, and got silently truncated -- leaving the agent unable to tell "hidden"
@@ -501,13 +501,13 @@ matters when an agent is the reader:
 |---|---|---|
 | a term with no hits | 0 | **~23** |
 | `idempotency` | 14 | ~619 |
-| `prisma` | 240 | ~1,752 |
-| `the` | 10,198 | **~1,805** |
+| `prisma` | 240 | ~1,224 |
+| `the` | 10,198 | **~1,270** |
 
-Ten thousand matches costs three percent more than two hundred. The cap is
-what makes the tool safe to hand an agent — an unbounded `grep` of a common
-term ran ~29k tokens and was silently truncated by the host, leaving the model
-unable to tell "withheld" from "absent".
+Ten thousand matches costs about the same as two hundred. Results are also
+spread across files rather than spent on whichever note is chattiest: one line
+each until the budget binds, so `prisma` now reports from **25 notes instead
+of 14, for a third fewer tokens**.
 
 **Speed is linear in vault size, and dominated by how many lines match.**
 
@@ -907,7 +907,8 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_AGENTS` | `claude codex gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
-| `AI_MEM_SEARCH_LIMIT` | `40` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
+| `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
+| `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
 
 ## Why plain files
 
