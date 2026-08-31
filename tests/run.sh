@@ -938,12 +938,49 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
 
+# --- what a new user actually gets ------------------------------------------
+# The README documents ai-mem-serve and ai-mem-mcp prominently, and neither
+# reached anyone who installed the documented way: both were added to
+# package.json's `files` when they were written and never to the installer's
+# copy list, so they shipped to npm and stopped there. Asserted against a real
+# install rather than against the file list, because the file list was exactly
+# what looked correct.
+NEWHOME="$(mktemp -d)"
+HOME="$NEWHOME" node "$REPO_ROOT/bin/create-ai-memory.js" "$NEWHOME/ai-memory" </dev/null >/dev/null 2>&1
+
+for f in shell/ai-mem.zsh bin/ai-mem-serve.js bin/ai-mem-mcp.js web/viewer.html package.json; do
+  exists "$NEWHOME/ai-memory/$f" "a fresh install ships $f"
+done
+
+# Present on disk is not the same as reachable. npm create copies the tool into
+# a folder rather than installing it globally, so nothing puts the bin entries
+# on PATH -- they have to be exposed as functions or the documented commands
+# simply do not exist for that user.
+NEWCMDS="$(HOME="$NEWHOME" zsh -c '
+  source "'"$NEWHOME"'/ai-memory/shell/ai-mem.zsh" >/dev/null 2>&1
+  for c in claude-start ai-note ai-lesson ai-mem-search ai-mem-lint ai-mem-serve ai-mem-mcp ai-context ai-mem-vault-backup; do
+    (( $+functions[$c] )) || print -r -- "$c"
+  done')"
+is "$NEWCMDS" "" "every command the README documents exists after a fresh install"
+
+# The version the MCP server reports comes from package.json; without it every
+# client saw 0.0.0.
+MCPVER="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  | HOME="$NEWHOME" zsh -c '
+      source "'"$NEWHOME"'/ai-memory/shell/ai-mem.zsh" >/dev/null 2>&1
+      ai-mem-mcp' 2>/dev/null \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s.trim().split("\n")[0]).result.serverInfo.version)}catch{}})')"
+hasnt "$MCPVER" "0.0.0" "a freshly installed MCP server reports its real version, not 0.0.0"
+
 # --- the suite must never hijack a browser -----------------------------------
 # ai-mem-serve opens a tab by default, which is right when a person asks to
 # see their memory and wrong every other time. One spawn here predated that
 # behaviour and popped a window showing the 3-note test fixture on every run.
 # Asserted rather than remembered.
-SPAWNS_WITHOUT_NOOPEN="$(grep -n 'ai-mem-serve\.js' "$REPO_ROOT/tests/run.sh" | grep -v -- '--no-open' || true)"
+# Match an actual invocation (node ... ai-mem-serve.js), not every mention of
+# the filename -- a path inside a `for` loop is not a spawn.
+SPAWNS_WITHOUT_NOOPEN="$(grep -nE 'node .*ai-mem-serve\.js' "$REPO_ROOT/tests/run.sh" \
+    | grep -vE '^[0-9]+:[[:space:]]*#' | grep -v -- '--no-open' || true)"
 is "$SPAWNS_WITHOUT_NOOPEN" "" "no test starts ai-mem-serve without --no-open"
 
 # --- lessons outrank session logs --------------------------------------------

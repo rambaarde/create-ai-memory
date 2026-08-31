@@ -22,7 +22,17 @@ const pkgRoot = resolve(__dirname, '..');                       // bundled tool
 const dest = resolve(process.argv[2] || join(homedir(), 'ai-memory'));
 
 // Files that make up the tool; copied verbatim from the package into dest.
-const ITEMS = ['shell', 'hooks', 'vault-template', 'install.sh', 'create-ai-memory.plugin.zsh', 'LICENSE'];
+//
+// `bin` and `web` are as load-bearing as `shell`: ai-mem-serve is the graph
+// viewer and ai-mem-mcp is how GUI clients reach the vault at all. Both were
+// added to package.json's `files` when they were written, so they shipped in
+// the tarball -- and stopped there, because this list was never updated. A
+// user who installed the documented way got neither, while the README told
+// them to run both.
+//
+// package.json comes along because ai-mem-mcp reports its own version from it;
+// without it the server introduced itself to every client as 0.0.0.
+const ITEMS = ['shell', 'bin', 'web', 'hooks', 'vault-template', 'install.sh', 'create-ai-memory.plugin.zsh', 'package.json', 'LICENSE'];
 
 console.log(`create-ai-memory: installing into ${dest}`);
 mkdirSync(dest, { recursive: true });
