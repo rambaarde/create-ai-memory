@@ -49,12 +49,17 @@ export AI_MEM_STANDARDS="$AI_MEM_ROOT/_Standards.md"
 export AI_MEM_PROJECT_DIR="$AI_MEM_ROOT/_projects"
 export AI_MEM_SESSION_DIR="$AI_MEM_ROOT/_session_logs"
 
+# `note_path`, not `path`: in zsh `path` is the special array tied to $PATH,
+# so `local path=...` inside a function replaces command lookup with the
+# string being passed in and every external command becomes "command not
+# found". This function only uses builtins, so it survived the mistake -- but
+# the next editor to add a `grep` here would not.
 __ai_mem_guard() {
-    local path="${1:-}"
-    case "$path" in
+    local note_path="${1:-}"
+    case "$note_path" in
         "$AI_MEM_ROOT"|"$AI_MEM_ROOT"/*) return 0 ;;
         *)
-            echo "Refusing to touch non-memory path: $path"
+            echo "Refusing to touch non-memory path: $note_path"
             return 1
             ;;
     esac
@@ -117,14 +122,59 @@ ai-mem-vault-backup() {
     fi
 }
 # Read a vault note only when it exists inside the memory root.
+#
+# A note may declare `mirror_of: <other-note>` in its frontmatter, as the
+# shipped _Standards.md does for _Global_Profile.md. The mirror exists so the
+# shared rules stay visible wherever only one of the two gets read -- but
+# injecting BOTH in full into the SAME prompt restates text the model just
+# finished reading. Measured on a real vault: 72 of the mirror's 80 unique
+# lines were already verbatim in its source, ~2900 of the launch prompt's
+# ~7200 tokens spent saying the same thing twice.
+#
+# So a mirror contributes only the lines that actually differ. This fails
+# OPEN in every uncertain case -- no frontmatter, an unreadable or missing
+# target, a target outside the vault, or a diff that would leave nothing --
+# because injecting a note twice merely costs tokens, while dropping one
+# costs the agent context it was promised.
 __ai_mem_note_contents() {
-    local path="${1:-}"
-    if [[ -z "$path" || ! -f "$path" ]]; then
+    local note_path="${1:-}"
+    if [[ -z "$note_path" || ! -f "$note_path" ]]; then
         return 0
     fi
 
-    __ai_mem_guard "$path" || return 1
-    print -r -- "$(<"$path")"
+    __ai_mem_guard "$note_path" || return 1
+
+    # Read mirror_of from the frontmatter block only (lines 2..next `---`), so
+    # the word appearing in a note's prose can never be mistaken for a claim.
+    local mirror
+    mirror="$(sed -n '2,/^---$/p' "$note_path" 2>/dev/null | sed -n 's/^mirror_of:[[:space:]]*//p' | head -1)"
+    if [[ -z "$mirror" ]]; then
+        print -r -- "$(<"$note_path")"
+        return 0
+    fi
+
+    # A mirror names a sibling note, never a path. __ai_mem_guard matches on
+    # the string, so "$AI_MEM_ROOT/../../etc/passwd" would satisfy it -- and
+    # this value comes out of a file's frontmatter, so accepting a path here
+    # would turn any note into a request to read an arbitrary file. Rejecting
+    # every separator outright is both the safer rule and the simpler one.
+    local target="$AI_MEM_ROOT/$mirror"
+    if [[ "$mirror" == */* || ! -f "$target" ]]; then
+        print -r -- "$(<"$note_path")"
+        return 0
+    fi
+
+    # -x -F: drop only lines that are byte-for-byte identical to one in the
+    # source. Anything reworded stays, because a near-match is a real edit.
+    local unique
+    unique="$(grep -vxF -f "$target" -- "$note_path" 2>/dev/null)"
+    if [[ -z "${unique//[[:space:]]/}" ]]; then
+        print -r -- "(identical to ${mirror}; nothing further)"
+        return 0
+    fi
+
+    print -r -- "(mirror of ${mirror}, shown above -- only the lines that differ from it are repeated here)"
+    print -r -- "$unique"
 }
 
 __ai_mem_resolve_project() {

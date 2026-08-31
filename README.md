@@ -354,6 +354,36 @@ a character class.)
 logs -- `ai-mem-search postgres checkout-api`. Unknown project names fail
 explicitly rather than silently searching everything.
 
+### Mirrored notes are not injected twice
+
+`_Standards.md` ships declaring `mirror_of: _Global_Profile.md` in its
+frontmatter. The mirror exists so the shared rules stay visible wherever only
+one of the two notes is read -- but the launch prompt reads *both*, so
+injecting both in full restates text the model has just finished reading.
+
+When a note declares `mirror_of: <sibling note>`, only the lines that
+actually differ from that source are injected, under a one-line marker
+naming what was elided:
+
+```text
+- Standards:
+(mirror of _Global_Profile.md, shown above -- only the lines that differ from it are repeated here)
+## Standards Addendum
+* Keep `_Standards.md` and `_Global_Profile.md` in lockstep when shared rules change.
+...
+```
+
+Measured on a real vault: 72 of the mirror's 80 unique lines were already
+verbatim in its source, and the launch prompt went from **~7,200 to ~4,300
+tokens -- a 40% cut with nothing lost**, paid once per session per agent.
+
+Matching is exact, line by line, so anything reworded is kept -- a near-match
+is a real edit. The comparison fails **open** in every uncertain case: no
+frontmatter, a missing source, a `mirror_of` containing a path separator, or
+a diff that would leave nothing all inject the note in full. Injecting a note
+twice costs tokens; dropping one costs the agent context it was promised, and
+those are not the same kind of mistake.
+
 ### Lessons are indexed, not injected
 
 `ai-lesson` writes to `_lessons/<topic-slug>.md`, and those entries are the
