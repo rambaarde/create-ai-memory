@@ -200,6 +200,7 @@ off last time.
 
 - [Session skills](#session-skills-optional)
 - [Your vault](#your-vault)
+- [Open Knowledge Format](#open-knowledge-format)
 - [Add another agent](#add-another-agent)
 - [Integrations](#integrations)
 - [Configuration](#configuration)
@@ -276,7 +277,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
-| `ai-mem-lint` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes |
+| `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
 | `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 40) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
@@ -515,6 +516,44 @@ $AI_MEM_ROOT/
 Notes are created from templates on first use and never overwritten. Edit
 `_Global_Profile.md` and `_Standards.md` to make them yours; the shipped versions
 are sanitized placeholders.
+
+## Open Knowledge Format
+
+The vault is close to [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)
+(OKF) — Google's open spec for portable, agent-readable knowledge — mostly by
+convergence rather than adoption. Both bet on the same thing: plain Markdown
+in a directory tree, in git, with no runtime.
+
+| OKF expects | Here |
+|---|---|
+| Markdown files in a directory hierarchy | ✅ `_projects/`, `_lessons/`, `_session_logs/`, `_proposals/` |
+| YAML frontmatter | ✅ every note |
+| **A `type` field — the only required one** | ✅ `ai-project-context`, `ai-lesson`, `ai-session-log`, `ai-global-profile`, `ai-standards` |
+| Cross-links forming a graph | ⚠️ via `[[wikilink]]`, not `[text](path.md)` |
+| An `index.md` per directory | ❌ not generated |
+| No SDK, no proprietary account, git-versionable | ✅ |
+
+Two deliberate deviations. **Links stay Obsidian-style** — the vault is meant
+to be opened in Obsidian, and the graph view and backlinks are the reason
+many people keep one; `ai-mem-search` resolves `[[wikilinks]]` itself. **No
+`index.md`** because nothing here reads one yet, and a generated index that
+nobody consumes is a file that goes stale.
+
+Session logs predate the `type` field, so a vault that has been in use holds
+notes without it. `ai-mem-lint` counts them, and `ai-mem-lint --fix`
+backfills:
+
+```console
+$ ai-mem-lint
+350 session log(s) missing the `type:` frontmatter field (Open Knowledge Format requires it). Fix with: ai-mem-lint --fix
+
+$ ai-mem-lint --fix
+backfilled `type: ai-session-log` into 350 session log(s)
+```
+
+It edits in place, preserves existing frontmatter and body, opens a
+frontmatter block for a note that had none, and is idempotent — running it
+twice does not stack a second field.
 
 ## Add another agent
 

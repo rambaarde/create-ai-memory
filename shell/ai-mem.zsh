@@ -783,10 +783,20 @@ ai-lesson() {
 # "isolated dots in Graph View" class of problem before you have to notice it
 # by eye.
 ai-mem-lint() {
+    local fix=0
+    [[ "${1:-}" == "--fix" ]] && fix=1
     local issues=0 f label target found
+    # Open Knowledge Format names exactly one required frontmatter field:
+    # `type`. Every note the vault ships already declares one except session
+    # logs, which predate the field -- so a vault that has been in use carries
+    # a backlog of them. Counted rather than listed: one actionable line beats
+    # several hundred identical ones, and the fix is a single pass anyway.
+    local -a untyped_files
 
     while IFS= read -r -d '' f; do
         [[ "${f:t}" == "_session_template.md" ]] && continue
+
+        grep -qm1 '^type: ' "$f" 2>/dev/null || untyped_files+=("$f")
 
         if ! grep -qm1 -E '^project:.*\[\[.*\]\]' "$f" 2>/dev/null; then
             print -r -- "orphaned session log (no project link): $f"
@@ -813,6 +823,29 @@ ai-mem-lint() {
             (( issues++ ))
         fi
     done < <(find "$AI_MEM_PROJECT_DIR" -maxdepth 1 -name "*.md" -print0 2>/dev/null)
+
+    if (( $#untyped_files )); then
+        if (( fix )); then
+            # Written by hand rather than with `sed -i`, whose in-place flag
+            # takes an argument on BSD and not on GNU -- a portability trap
+            # for a one-liner a user would otherwise paste from the README.
+            local tmp
+            for f in $untyped_files; do
+                __ai_mem_guard "$f" >/dev/null || continue
+                tmp="$f.aimem-backfill"
+                if [[ "$(head -1 "$f")" == "---" ]]; then
+                    { head -1 "$f"; print -r -- "type: ai-session-log"; tail -n +2 "$f"; } > "$tmp"
+                else
+                    { print -rl -- "---" "type: ai-session-log" "---" ""; cat "$f"; } > "$tmp"
+                fi
+                mv "$tmp" "$f"
+            done
+            print -r -- "backfilled \`type: ai-session-log\` into $#untyped_files session log(s)"
+        else
+            print -r -- "$#untyped_files session log(s) missing the \`type:\` frontmatter field (Open Knowledge Format requires it). Fix with: ai-mem-lint --fix"
+            (( issues++ ))
+        fi
+    fi
 
     if (( issues == 0 )); then
         print -r -- "ok: vault links are clean"

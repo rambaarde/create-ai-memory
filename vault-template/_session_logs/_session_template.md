@@ -1,4 +1,5 @@
 ---
+type: ai-session-log
 date: {{date}}
 project: "[[{{project_name}}]]"
 previous: "{{previous_session_link}}"
