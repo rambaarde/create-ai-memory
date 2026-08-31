@@ -256,12 +256,17 @@ is "$(find "$AI_MEM_ROOT" -name 'evil.md' -o -name '*passwd*' 2>/dev/null)" "" \
   "ai-lesson cannot path-traverse out of _lessons/ via a crafted topic"
 exists "$AI_MEM_ROOT/_lessons/etc-evil.md" "a crafted topic is slugified flat, not treated as a path"
 
-# --- 10. cursor adapter: writes/clears its managed rule file (no GUI) ---------
+# --- 10. cursor adapter: prompt to cursor-agent, skills to the rule file ------
 # cursor has no headless prompt path; the adapter persists the session's skills
 # as an always-apply rule instead. Verify that offline with the GUI launch stubbed.
 CURSOR_HOME="$(mktemp -d)"; _OLDHOME="$HOME"; export HOME="$CURSOR_HOME"
 open()   { : ; }   # stub `open -a Cursor`
-cursor() { : ; }   # stub the cursor CLI if present
+# Both entry points are stubbed before any adapter call. cursor-agent is a
+# real binary on a developer machine, and the adapter now prefers it -- an
+# unstubbed test would shell out to the installed CLI and, on a logged-in
+# machine, actually start an agent session.
+cursor() { : ; }
+cursor-agent() { : ; }
 CRULE="$HOME/.cursor/rules/_ai-session.mdc"
 __ai_adapter_cursor "mem" "SESSION SKILL BLOCK" </dev/null
 exists "$CRULE"                                "cursor adapter writes the managed rule file"
@@ -269,6 +274,25 @@ has "$(<"$CRULE")" "SESSION SKILL BLOCK"       "cursor rule carries the session 
 __ai_adapter_cursor "mem" "" </dev/null
 [[ ! -e "$CRULE" ]] && ok "cursor adapter clears the rule when no skills are chosen" \
                     || nok "cursor adapter clears the rule when no skills are chosen"
+# Cursor ships two entry points and only one of them can take a prompt.
+# `cursor-agent` accepts it positionally; the `cursor` GUI has no prompt path,
+# so preferring the GUI silently discards the whole memory prompt -- the
+# agent starts with no vault context and nothing reports a failure.
+CURSOR_CAPTURE="$(mktemp)"
+cursor-agent() { print -r -- "$1" > "$CURSOR_CAPTURE"; }
+__ai_adapter_cursor "MEMORY PROMPT BODY" "" </dev/null
+is "$(<"$CURSOR_CAPTURE")" "MEMORY PROMPT BODY" \
+   "cursor adapter hands the memory prompt to cursor-agent"
+
+# And it must be preferred over the GUI when both exist.
+: > "$CURSOR_CAPTURE"
+GUI_CAPTURE="$(mktemp)"
+cursor() { print -r -- "gui-launched" > "$GUI_CAPTURE"; }
+__ai_adapter_cursor "PREFER AGENT" "" </dev/null
+is "$(<"$CURSOR_CAPTURE")" "PREFER AGENT" "cursor adapter prefers cursor-agent over the GUI"
+is "$(<"$GUI_CAPTURE")"    ""             "cursor adapter does not also launch the GUI"
+unfunction cursor-agent 2>/dev/null
+
 unfunction open cursor 2>/dev/null
 export HOME="$_OLDHOME"
 

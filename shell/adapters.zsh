@@ -31,9 +31,20 @@ __ai_adapter_gemini() {
     gemini --include-directories "$AI_MEM_ROOT" -i "$memory_prompt"
 }
 
-# Cursor has no CLI prompt path, so persist the session's skill choices as a
-# managed always-apply rule that this adapter rewrites each launch (and clears
-# when nothing is selected).
+# Cursor ships two entry points. `cursor-agent` is the CLI and takes the
+# prompt positionally, so it gets the vault context like every other agent.
+# `cursor` is the GUI, which has no prompt path -- launching it drops the
+# memory prompt entirely, so it is a fallback rather than the target.
+#
+# Either way the session's skill choices are persisted as a managed
+# always-apply rule, rewritten each launch and cleared when nothing is
+# selected: cursor-agent has no --append-system-prompt equivalent, so the
+# rule file is the only channel for the mode block.
+#
+# --workspace is deliberately not passed. It sets the working directory,
+# which already is the project being worked on, and it is not an --add-dir
+# equivalent -- the vault reaches Cursor through the absolute note paths
+# inlined in the prompt.
 __ai_adapter_cursor() {
     local memory_prompt="$1" mode_block="$2"
     shift 2
@@ -52,7 +63,9 @@ __ai_adapter_cursor() {
     else
         rm -f "$cursor_rule"
     fi
-    if command -v cursor >/dev/null 2>&1; then
+    if command -v cursor-agent >/dev/null 2>&1; then
+        cursor-agent "$memory_prompt" "$@"
+    elif command -v cursor >/dev/null 2>&1; then
         cursor "$@"
     else
         open -a Cursor
