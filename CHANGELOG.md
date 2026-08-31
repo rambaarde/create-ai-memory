@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.14.3](https://github.com/rambaarde/create-ai-memory/compare/v0.14.2...v0.14.3) (2026-08-31)
+
+
+### Bug Fixes
+
+* **search:** rank lessons above session logs ([220db71](https://github.com/rambaarde/create-ai-memory/commit/220db7199be9d23f1ff237b8d5735366426f8144))
+* **search:** rank lessons above session logs; stop tests opening a browser ([2e758e6](https://github.com/rambaarde/create-ai-memory/commit/2e758e6688a0dc1add078629c53b64aad3313918))
+* **search:** rank lessons above session logs; stop tests opening a browser ([7f2715c](https://github.com/rambaarde/create-ai-memory/commit/7f2715c76eb9ec7abf83b500d0bcb8ce41493a47))
+* **tests:** stop the suite opening a browser tab ([0072ffa](https://github.com/rambaarde/create-ai-memory/commit/0072ffad7173775cad72a8d98312d975a65568aa))
+
+
+### Performance Improvements
+
+* **search:** spread results across notes, and search when blocked ([f5ed8cf](https://github.com/rambaarde/create-ai-memory/commit/f5ed8cf93b60a207cd9302239ec809209be956a9))
+* **search:** spread results across notes, and search when blocked ([f9b9141](https://github.com/rambaarde/create-ai-memory/commit/f9b9141b273f35c399583f1ab3ede59a66b90f00))
+* **search:** spread results across notes; docs: cut the README to signal ([e451afb](https://github.com/rambaarde/create-ai-memory/commit/e451afb592dd019e13672f27397d7a8c7517db3c))
+
 ## [0.14.2](https://github.com/rambaarde/create-ai-memory/compare/v0.14.1...v0.14.2) (2026-08-31)
 
 
