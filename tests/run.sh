@@ -938,6 +938,32 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
 
+# --- an unfilled project note announces itself ---------------------------------
+# The prompt points at the project note as "Project context". Straight from the
+# template it contains "[What problem this repository solves]" -- which reads
+# as context and carries none. Present-but-empty is the same failure as a
+# search that returns nothing while looking authoritative, and on a new
+# install it is every project's first session.
+BLANKVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$BLANKVAULT" "$REPO_ROOT/install.sh" >/dev/null
+BLANK_PROMPT="$(AI_MEM_ROOT="$BLANKVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$WORK"'"
+  ai-context
+' 2>/dev/null)"
+has "$BLANK_PROMPT" "NOT YET FILLED IN" "an unfilled project note is flagged, not passed off as context"
+has "$BLANK_PROMPT" "fill it in early"  "the prompt says what to do about it"
+
+# And once it holds real content it must say nothing at all.
+sed -i '' 's|\[What problem this repository solves\]|Ships widgets.|' \
+  "$BLANKVAULT/_projects/$(basename "$WORK").md" 2>/dev/null || true
+FILLED_PROMPT="$(AI_MEM_ROOT="$BLANKVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$WORK"'"
+  ai-context
+' 2>/dev/null)"
+hasnt "$FILLED_PROMPT" "NOT YET FILLED IN" "a filled project note is not flagged"
+
 # --- what a new user actually gets ------------------------------------------
 # The README documents ai-mem-serve and ai-mem-mcp prominently, and neither
 # reached anyone who installed the documented way: both were added to
