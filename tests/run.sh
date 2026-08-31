@@ -567,6 +567,64 @@ AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 
+# --- MCP server: the only channel a GUI client has ----------------------------
+# The *-start launchers reach an agent through its opening prompt. A GUI opened
+# from the Dock never runs one, so Claude Desktop and the Cursor GUI see
+# nothing. These assertions drive the server over real stdio JSON-RPC rather
+# than unit-testing its internals, because the wire format is the contract.
+MCPVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$MCPVAULT" "$REPO_ROOT/install.sh" >/dev/null
+mkdir -p "$MCPVAULT/_lessons"
+print -rl -- "---" "type: ai-lesson" "---" "vault holds a needle" > "$MCPVAULT/_lessons/mcp-probe.md"
+
+MCP_IN="$(mktemp)"
+{
+  print -r -- '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
+  print -r -- '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+  print -r -- '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+  print -r -- '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"needle"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"zzz-absent"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"read_note","arguments":{"path":"../../../etc/passwd"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"read_note","arguments":{"path":"_lessons/mcp-probe.md"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"list_lessons","arguments":{}}}'
+  print -r -- '{"jsonrpc":"2.0","id":8,"method":"bogus/method"}'
+} > "$MCP_IN"
+
+MCP_OUT="$(mktemp)"
+AI_MEM_ROOT="$MCPVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" < "$MCP_IN" 2>/dev/null > "$MCP_OUT"
+
+# Every reply must be one line of valid JSON, and a notification must get none.
+is "$(wc -l < "$MCP_OUT" | tr -d ' ')" "8" "MCP server answers every request and never answers a notification"
+if node -e 'require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").forEach(l=>JSON.parse(l))' "$MCP_OUT" 2>/dev/null; then
+  ok "MCP server emits one valid JSON object per line"
+else
+  nok "MCP server emits one valid JSON object per line"
+fi
+
+mcpfield() { node -e '
+  const ls=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse);
+  const m=ls.find(x=>x.id==process.argv[2]);
+  if(process.argv[3]==="text") process.stdout.write(m.result.content[0].text);
+  else if(process.argv[3]==="isError") process.stdout.write(String(!!m.result.isError));
+  else if(process.argv[3]==="tools") process.stdout.write(m.result.tools.map(t=>t.name).sort().join(","));
+  else if(process.argv[3]==="error") process.stdout.write(m.error?m.error.message:"");
+' "$MCP_OUT" "$1" "$2"; }
+
+is "$(mcpfield 2 tools)" "get_context,list_lessons,read_note,search_memory" "MCP server advertises its four tools"
+has "$(mcpfield 3 text)" "needle" "MCP search reaches the vault's contents"
+
+# "no matches" is an answer, not a transport fault: the model must see it and
+# adapt rather than the client reporting a broken tool.
+has "$(mcpfield 4 text)" "no matches"  "MCP search reports an empty result as content"
+is  "$(mcpfield 4 isError)" "false"    "MCP search does not flag an empty result as an error"
+
+# The vault is the boundary. A string prefix check would let ../ through.
+is  "$(mcpfield 5 isError)" "true"     "MCP read_note refuses a path escaping the vault"
+has "$(mcpfield 5 text)" "not inside the vault" "MCP read_note says why it refused"
+has "$(mcpfield 6 text)" "vault holds a needle" "MCP read_note reads a note by vault-relative path"
+has "$(mcpfield 7 text)" "mcp-probe"   "MCP list_lessons names the recorded lessons"
+has "$(mcpfield 8 error)" "method not found" "MCP server rejects an unknown method as a JSON-RPC error"
+
 # --- Open Knowledge Format: every note declares a `type` -----------------------
 # OKF names exactly one required frontmatter field. Every shipped template
 # declared one except the session log, so a vault in real use accumulates
