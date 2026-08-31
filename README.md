@@ -675,6 +675,11 @@ Launchers are not hardcoded. Each agent is one small adapter, and the
    ```
 3. `aider-start` now exists. No core edits.
 
+`cursor-start` targets `cursor-agent`, Cursor's CLI, which takes the prompt
+positionally. If only the `cursor` GUI is installed it falls back to opening
+that instead -- the GUI has no prompt path, so the session's skills still
+arrive via the managed rule file but the vault context does not.
+
 Name private helpers with **two** leading underscores (`__ai_adapter_aider`,
 not `_ai_adapter_aider`). Claude Code replays a snapshot of your interactive
 shell for every command it runs, and that snapshot drops single-underscore
