@@ -938,6 +938,30 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
 
+# --- lessons outrank session logs --------------------------------------------
+# The case that matters most is hitting a blocker you have hit before, and
+# recency alone got it exactly wrong: session logs outnumber lessons about
+# four to one and are always newer, so they swept the results. On a real vault
+# "snapshot" returned 25 session logs and none of the three lessons that
+# answer it. The durable answer was in the vault and unreachable.
+RANKVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$RANKVAULT/_lessons" "$RANKVAULT/_session_logs/p"
+print -rl -- "---" "type: ai-lesson" "---" "the widget always jams" > "$RANKVAULT/_lessons/old-lesson.md"
+for i in 1 2 3 4 5 6; do
+  print -rl -- "---" "type: ai-session-log" "---" "mentioned the widget in passing" \
+    > "$RANKVAULT/_session_logs/p/p-2026-12-0${i}_00-00-00.md"
+done
+
+RANK_OUT="$(AI_MEM_ROOT="$RANKVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-search widget
+')"
+# The lesson is the OLDEST file here, so recency alone would bury it last.
+has "$(print -r -- "$RANK_OUT" | sed -n '4p')" "_lessons/" \
+    "a lesson outranks newer session logs, even when it is the oldest match"
+is  "$(print -r -- "$RANK_OUT" | sed -n '5p' | grep -c '_session_logs/')" "1" \
+    "session logs still follow, newest first, after the lessons"
+
 # --- search spreads its budget across files ----------------------------------
 # The line budget used to go to whichever note was chattiest. Measured on a
 # real vault: 'prisma' matched 82 files, one long log took 9 of the 40 slots,
