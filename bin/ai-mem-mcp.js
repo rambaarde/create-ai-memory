@@ -109,6 +109,7 @@ const INSTRUCTIONS = [
   '',
   'Before answering anything about their work, call get_context. It returns their profile, standards, the current project note, and what the last session concluded.',
   'Before solving a problem, call search_memory -- they may have solved it already, and repeating a solved mistake is the failure this vault exists to prevent. Search broadly first; too specific a first query is the usual way to miss something.',
+  'When you hit a blocker -- an error you do not understand, an unclear failure, or a second failed attempt at the same thing -- search again before guessing. Search the error text, the tool name and the symptom separately; one of the three usually hits.',
   '',
   'Write back. A session that only reads leaves nothing behind, and the next one starts cold:',
   '- add_note for what happened, decided, or broke during this session.',

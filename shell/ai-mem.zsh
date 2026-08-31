@@ -458,6 +458,7 @@ Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are plain shell commands already on PATH. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
+When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down. Search the error text, the tool name, and the symptom separately; one of the three usually hits.
 If the user asks to see, open or browse their memory rather than search it, run \`ai-mem-serve\` -- it opens the vault as a graph in their browser, and is safe to run again if it is already up.
 When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <problem> <solution>\` -- e.g. \`ai-lesson rate-limiting "a fixed-window limiter kept losing bursts of legitimate traffic" "switched to a token bucket, which absorbs bursts correctly"\`. It appends a dated Problem/Solution entry to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
 EOF
@@ -973,9 +974,32 @@ ai-mem-search() {
     # distractor for a model, so fewer, cleaner hits beat more of them.
     # Count goes FIRST -- the reader needs the size of the result set before
     # the result set, not after it.
-    local total limit
+    local total limit per_file
     total="$(print -r -- "$raw" | wc -l | tr -d ' ')"
-    limit="${AI_MEM_SEARCH_LIMIT:-40}"
+    limit="${AI_MEM_SEARCH_LIMIT:-25}"
+    per_file="${AI_MEM_SEARCH_PER_FILE:-1}"
+
+    # Spend the line budget on distinct sources rather than on whichever note
+    # happens to be chattiest. Measured on a real vault: 'prisma' matched 82
+    # files, but one long session log took 9 of the 40 slots and the output
+    # reached only 14 of them. Capping lines per file reaches roughly three
+    # times as many notes for the same tokens, which is the number that
+    # actually decides whether the answer is in there.
+    #
+    # Applied after the sort, so the lines kept from each file are its newest.
+    # Only engage when the budget actually binds. If every match fits, showing
+    # all of them beats withholding lines from a note that had three -- the
+    # cap exists to allocate a scarce budget, and nothing is scarce here.
+    local spread
+    if (( total > limit )); then
+        spread="$(print -r -- "$sorted" | awk -v cap="$per_file" '
+            { f = $0; sub(/:[0-9]+:.*$/, "", f); if (++seen[f] <= cap) print }')"
+    else
+        spread="$sorted"
+    fi
+    local files_shown
+    files_shown="$(print -r -- "$spread" | head -n "$limit" | awk '
+        { f = $0; sub(/:[0-9]+:.*$/, "", f); seen[f] = 1 } END { print length(seen) }')"
 
     print -r -- "$total match(es) for '$term'"
     print -r -- "paths below $search_root"
@@ -983,13 +1007,21 @@ ai-mem-search() {
     # Strip the repeated vault root (a third to a half of all output bytes on
     # a real vault, with zero information lost -- it is printed once above)
     # and clamp very long lines, which are common in prose notes.
-    print -r -- "$sorted" | head -n "$limit" \
+    local shown
+    shown="$(print -r -- "$spread" | head -n "$limit")"
+    print -r -- "$shown" \
         | sed "s|^${search_root}/||" \
         | awk '{ if (length($0) > 200) print substr($0, 1, 200) " [...]"; else print }'
 
-    if (( total > limit )); then
+    local shown_n
+    shown_n="$(print -r -- "$shown" | wc -l | tr -d ' ')"
+    if (( total > shown_n )); then
         print -r -- "--"
-        print -r -- "showing $limit of $total ($(( total - limit )) hidden) -- narrow with: ai-mem-search '$term' <project>, or raise AI_MEM_SEARCH_LIMIT"
+        # The withheld count stays explicit. "showing 25 of 240" implies it,
+        # but the reader has to be able to tell "hidden" from "absent" without
+        # doing arithmetic -- that distinction is the whole reason this line
+        # exists.
+        print -r -- "showing $shown_n of $total ($(( total - shown_n )) hidden), across $files_shown file(s), at most $per_file line(s) each -- for more lines per file raise AI_MEM_SEARCH_PER_FILE, or narrow with: ai-mem-search '$term' <project>"
     fi
     # One hop out: resolve [[wikilinks]] found on matched lines to their
     # target note (currently: project notes only -- the confirmed use case

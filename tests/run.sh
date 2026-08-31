@@ -938,6 +938,53 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
 
+# --- search spreads its budget across files ----------------------------------
+# The line budget used to go to whichever note was chattiest. Measured on a
+# real vault: 'prisma' matched 82 files, one long log took 9 of the 40 slots,
+# and the output reached only 14 of them. Breadth is what decides whether the
+# answer is in there at all.
+SPREADVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$SPREADVAULT/_session_logs/p"
+# one note that mentions the term many times, plus several that mention it once
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  print -r -- "needle line $i" >> "$SPREADVAULT/_session_logs/p/p-2026-01-01_00-00-01.md"
+done
+for i in 2 3 4 5 6 7 8; do
+  print -r -- "needle once" > "$SPREADVAULT/_session_logs/p/p-2026-01-0${i}_00-00-00.md"
+done
+
+SPREAD_OUT="$(AI_MEM_ROOT="$SPREADVAULT" AI_MEM_SEARCH_LIMIT=8 zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-search needle
+')"
+SPREAD_FILES="$(print -r -- "$SPREAD_OUT" | sed -n '4,11p' | cut -d: -f1 | sort -u | grep -c .)"
+[[ "$SPREAD_FILES" -ge 7 ]] \
+  && ok  "search spends its budget on distinct files, not on the chattiest note ($SPREAD_FILES files)" \
+  || nok "search spends its budget on distinct files (only $SPREAD_FILES reached)"
+has "$SPREAD_OUT" "across"        "search says how many files its results came from"
+has "$SPREAD_OUT" "line(s) each"  "search says the per-file limit it applied"
+
+# The cap exists to allocate a scarce budget. When everything fits, nothing is
+# scarce, and withholding lines from a note that had three would be pure loss.
+FITS_OUT="$(AI_MEM_ROOT="$SPREADVAULT" AI_MEM_SEARCH_LIMIT=999 zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-search needle
+')"
+FITS_FROM_BIG="$(print -r -- "$FITS_OUT" | grep -c 'p-2026-01-01_00-00-01')"
+[[ "$FITS_FROM_BIG" -ge 12 ]] \
+  && nok_or_ok=ok || nok_or_ok=nok
+[[ "$nok_or_ok" == ok ]] \
+  && ok  "every line is shown when the whole result set fits, cap or not" \
+  || nok "every line is shown when the result set fits (got $FITS_FROM_BIG of 12)"
+hasnt "$FITS_OUT" "line(s) each" "no per-file notice when the cap never engaged"
+
+# Blockers are the moment the vault is most likely to hold the answer and
+# least likely to be consulted, so both channels have to say so explicitly.
+has "$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_context_prompt "/tmp/p.md" "" "/tmp/s.md"
+')" "hit a blocker" "the launch prompt tells the agent to search when it gets stuck"
+
 # --- lesson index: names at launch, bodies only on request --------------------
 # The agent cannot search for what it does not know exists, so the slugs are
 # injected; the bodies never are.
