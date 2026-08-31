@@ -567,6 +567,69 @@ AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 
+# --- graph server ------------------------------------------------------------
+# The vault is already a graph: notes with a `type` and wikilinks between them.
+# These assert the shape it serves, and that the note route cannot be talked
+# into reading outside the vault.
+GVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$GVAULT/_projects" "$GVAULT/_lessons"
+print -rl -- "---" "type: ai-project-context" "tags: [alpha, beta]" "---" "# Demo Project" > "$GVAULT/_projects/demo.md"
+print -rl -- "---" "type: ai-lesson" "---" "# A Lesson" "seen on [[demo]]" > "$GVAULT/_lessons/lesson-one.md"
+print -rl -- "---" "type: ai-lesson" "---" "# Orphan" "points at [[nothing-here]]" > "$GVAULT/_lessons/orphan.md"
+
+GPORT=7793
+AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" >/dev/null 2>&1 &
+GPID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  curl -sf -o /dev/null "http://127.0.0.1:$GPORT/api/graph" 2>/dev/null && break
+  sleep 0.3
+done
+
+GJSON="$(curl -sf "http://127.0.0.1:$GPORT/api/graph" 2>/dev/null)"
+gfield() { print -r -- "$GJSON" | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const g=JSON.parse(s);
+  const q=process.argv[1];
+  if(q==="nodes")     return process.stdout.write(String(g.nodes.length));
+  if(q==="edges")     return process.stdout.write(String(g.edges.length));
+  if(q==="types")     return process.stdout.write(g.nodes.map(n=>n.type).sort().join(","));
+  if(q==="tags")      return process.stdout.write((g.nodes.find(n=>n.id.endsWith("demo.md"))||{}).tags.join("|"));
+  if(q==="edgepair")  return process.stdout.write(g.edges.map(e=>e.source+">"+e.target).join(","));
+})' "$1"; }
+
+is "$(gfield nodes)" "3" "graph server returns every note as a node"
+# Two lessons link out but only one target exists. OKF requires consumers to
+# tolerate links that do not resolve, so the dangling one is dropped rather
+# than drawn to a node that is not there.
+is "$(gfield edges)" "1" "graph server drops a wikilink with no matching note"
+has "$(gfield edgepair)" "_projects/demo.md" "graph server resolves a wikilink by basename"
+is "$(gfield tags)" "alpha|beta" "graph server parses an inline frontmatter list"
+has "$(gfield types)" "ai-project-context" "graph server reports each note's declared type"
+
+NOTE_OK="$(curl -sf "http://127.0.0.1:$GPORT/api/note?path=_projects/demo.md" 2>/dev/null)"
+has "$NOTE_OK" "Demo Project" "graph server serves a note inside the vault"
+NOTE_BAD="$(curl -s "http://127.0.0.1:$GPORT/api/note?path=../../../etc/passwd" 2>/dev/null)"
+has   "$NOTE_BAD" "not inside the vault" "graph server refuses a note path escaping the vault"
+hasnt "$NOTE_BAD" "root:" "graph server leaks nothing when it refuses"
+
+# The vault holds private project history; the viewer has no business being
+# reachable from anywhere but this machine.
+if node -e '
+  const net=require("net"), os=require("os");
+  const ext=Object.values(os.networkInterfaces()).flat().find(i=>i&&i.family==="IPv4"&&!i.internal);
+  if(!ext) process.exit(0);                       // no external interface to test against
+  const s=net.connect({host:ext.address,port:Number(process.argv[1]),timeout:1200});
+  s.on("connect",()=>{s.destroy();process.exit(1)});
+  s.on("error",()=>process.exit(0));
+  s.on("timeout",()=>{s.destroy();process.exit(0)});
+' "$GPORT"; then
+  ok "graph server binds to loopback only, not to a routable interface"
+else
+  nok "graph server binds to loopback only, not to a routable interface"
+fi
+
+exists "$REPO_ROOT/web/viewer.html" "the viewer the server serves is shipped in the package"
+kill $GPID 2>/dev/null
+
 # --- MCP server: the only channel a GUI client has ----------------------------
 # The *-start launchers reach an agent through its opening prompt. A GUI opened
 # from the Dock never runs one, so Claude Desktop and the Cursor GUI see

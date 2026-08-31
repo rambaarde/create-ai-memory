@@ -204,6 +204,7 @@ off last time.
 - [Open Knowledge Format](#open-knowledge-format)
 - [Add another agent](#add-another-agent)
 - [Integrations](#integrations)
+- [Graph view](#graph-view)
 - [GUI clients (MCP)](#gui-clients-mcp)
 - [Configuration](#configuration)
 
@@ -335,6 +336,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
 | `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 40) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
+| `ai-mem-serve [port]` | Serve the vault as a browsable graph on `127.0.0.1` (see [Graph view](#graph-view)) |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
 Project is auto-resolved from the current git repo; pass a name to override.
@@ -689,6 +691,37 @@ private helpers with it. A one-underscore helper simply will not exist inside
 an agent-run command.
 
 ## Integrations
+
+### Graph view
+
+`ai-mem-search` answers a question you already knew to ask. This is for the
+other one — what is in there at all, and which notes turned out to be
+connected.
+
+```sh
+ai-mem-serve          # http://127.0.0.1:7777
+```
+
+![The vault as a graph: notes coloured by type, a lesson selected, its linked project highlighted](assets/graph-view.png)
+
+Nothing here is a separate database. The vault is already a graph — notes
+carrying a `type` in frontmatter with `[[wikilinks]]` between them — so this
+only draws what is on disk.
+
+- **Nodes are coloured by `type`** and sized by how many notes link to them, so
+  a project that has accumulated forty sessions looks like the hub it is.
+- **Selecting a note** dims everything it is not connected to, shows the note
+  rendered beside the graph, and lists what it links to.
+- **Durable knowledge** is the default view. Session logs usually outnumber
+  everything else several times over and all point at their project, which
+  buries the projects and lessons inside a hairball. Switch to *Everything* to
+  see them.
+- **Search** and the legend both filter; `/` focuses the search box.
+
+Bound to `127.0.0.1` only, deliberately. The vault holds project history and
+operational detail, and a viewer for it has no business being reachable from
+the network. Zero dependencies — the layout is a small force simulation rather
+than a charting library, so it works with no network at all.
 
 ### GUI clients (MCP)
 
