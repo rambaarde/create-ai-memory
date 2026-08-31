@@ -793,6 +793,27 @@ AI_MEM_ROOT="$OKFVAULT" zsh -c '
   ai-mem-lint --fix
 ' >/dev/null 2>&1 || true
 has "$(<"$TMPL")" "type: ai-session-log" "--fix repairs the session log template"
+
+# --fix is the explicit route; this is the one that reaches people who never
+# run it. Vault scaffolding only fills in MISSING files -- correctly, since
+# these are the user's own notes -- so an existing install keeps whatever
+# templates it was created with. `npm update` does not touch them and neither
+# does install.sh. Preparing a session repairs this one field in place.
+STALE="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$STALE" "$REPO_ROOT/install.sh" >/dev/null
+print -rl -- "---" "date: {{date}}" 'project: "[[{{project_name}}]]"' "---" "# Session Outcome" "* custom line I added" \
+  > "$STALE/_session_logs/_session_template.md"
+AI_MEM_ROOT="$STALE" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$WORK"'"
+  __ai_mem_prepare_session healproj >/dev/null
+' >/dev/null 2>&1 || true
+has "$(<"$STALE/_session_logs/_session_template.md")" "type: ai-session-log" \
+    "preparing a session repairs a stale template, without waiting for --fix"
+has "$(<"$STALE/_session_logs/_session_template.md")" "custom line I added" \
+    "the repair is additive and keeps the user's own edits to the template"
+has "$(<"$STALE/_session_logs/_session_template.md")" "{{project_name}}" \
+    "the repair leaves the template's placeholders intact"
 has "$(<"$TMPL")" "{{date}}"             "--fix leaves the template's placeholders intact"
 
 # The point of repairing it: a log created afterwards must carry the field.
