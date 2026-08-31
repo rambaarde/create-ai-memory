@@ -938,6 +938,46 @@ has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not fr
 LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
 is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
 
+# --- a stale template orphans every log it creates ----------------------------
+# The `project:` line has to be a [[wikilink]] or the log is disconnected from
+# its project note -- which is exactly what the graph edges and ai-mem-lint key
+# on. Scaffolding only fills in MISSING files, so a vault carries its original
+# templates forever and produces one orphaned log per session, silently.
+ORPHVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$ORPHVAULT" "$REPO_ROOT/install.sh" >/dev/null
+print -rl -- "---" "type: ai-session-log" "date: {{date}}" "project: {{project_name}}" \
+  "repo_root: [Insert Repo Root]" "---" "" "# Session Outcome" \
+  > "$ORPHVAULT/_session_logs/_session_template.md"
+
+( cd "$WORK" && AI_MEM_ROOT="$ORPHVAULT" zsh -c '
+    source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+    __ai_mem_prepare_session' >/dev/null 2>&1 )
+
+ORPH_TMPL="$(<"$ORPHVAULT/_session_logs/_session_template.md")"
+has "$ORPH_TMPL" 'project: "[[{{project_name}}]]"' "preparing a session repairs a template whose project link is not a wikilink"
+has "$ORPH_TMPL" "previous:" "the repair also restores the previous-session field"
+has "$ORPH_TMPL" "{{date}}"  "the repair leaves the template's placeholders intact"
+
+NEWLOG_LINK="$(grep -h '^project:' "$ORPHVAULT/_session_logs"/*/*.md 2>/dev/null | head -1)"
+has "$NEWLOG_LINK" "[[" "a log created after the repair links back to its project note"
+
+# Logs already written from the stale template stay orphaned until repaired.
+# Reporting them without offering a fix leaves hundreds of files to hand-edit.
+mkdir -p "$ORPHVAULT/_session_logs/legacy"
+print -rl -- "---" "type: ai-session-log" "project: legacy" "---" "# Session Outcome" \
+  > "$ORPHVAULT/_session_logs/legacy/legacy-2020-01-01_00-00-00.md"
+BEFORE_ORPH="$(AI_MEM_ROOT="$ORPHVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; ai-mem-lint' 2>&1 | grep -c orphaned)"
+AI_MEM_ROOT="$ORPHVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; ai-mem-lint --fix' >/dev/null 2>&1 || true
+AFTER_ORPH="$(AI_MEM_ROOT="$ORPHVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; ai-mem-lint' 2>&1 | grep -c orphaned)"
+[[ "$BEFORE_ORPH" -gt 0 && "$AFTER_ORPH" -eq 0 ]] \
+  && ok  "--fix links already-orphaned logs back to their project ($BEFORE_ORPH -> $AFTER_ORPH)" \
+  || nok "--fix links already-orphaned logs back to their project (got $BEFORE_ORPH -> $AFTER_ORPH)"
+has "$(<"$ORPHVAULT/_session_logs/legacy/legacy-2020-01-01_00-00-00.md")" "Session Outcome" \
+    "--fix preserves the body of a log it relinks"
+
 # --- an unfilled project note announces itself ---------------------------------
 # The prompt points at the project note as "Project context". Straight from the
 # template it contains "[What problem this repository solves]" -- which reads
