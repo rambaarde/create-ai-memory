@@ -542,6 +542,62 @@ AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 
+# --- lesson index: names at launch, bodies only on request --------------------
+# The agent cannot search for what it does not know exists, so the slugs are
+# injected; the bodies never are.
+LESSONVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$LESSONVAULT/_lessons"
+: > "$LESSONVAULT/_lessons/_lesson_template.md"
+for slug in alpha-lesson beta-lesson gamma-lesson; do
+  print -r -- "body of $slug must not be injected" > "$LESSONVAULT/_lessons/$slug.md"
+  sleep 0.01   # distinct mtimes, so "newest first" is actually assertable
+done
+
+IDX="$(AI_MEM_ROOT="$LESSONVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_lesson_index
+')"
+has   "$IDX" "alpha-lesson"  "lesson index lists a recorded lesson slug"
+has   "$IDX" "(3)"           "lesson index reports how many lessons exist"
+hasnt "$IDX" "_lesson_template" "lesson index excludes the template"
+hasnt "$IDX" "must not be injected" "lesson index carries slugs only, never lesson bodies"
+[[ "$IDX" == *"gamma-lesson, beta-lesson, alpha-lesson"* ]] \
+  && ok  "lesson index orders newest first, so a cap drops the stalest" \
+  || nok "lesson index orders newest first (got [$IDX])"
+
+# Wiring, not just the helper: the slugs are worthless unless they reach the
+# prompt the agent is actually launched with.
+mkdir -p "$LESSONVAULT/_projects" "$LESSONVAULT/_session_logs"
+PROMPT_WITH_IDX="$(AI_MEM_ROOT="$LESSONVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_context_prompt "$AI_MEM_PROJECT_DIR/demo.md" "" "$AI_MEM_SESSION_DIR/demo/today.md"
+')"
+has   "$PROMPT_WITH_IDX" "beta-lesson"          "the launch prompt carries the lesson index"
+hasnt "$PROMPT_WITH_IDX" "must not be injected" "the launch prompt carries no lesson bodies"
+
+# The cap is the whole reason this is safe to grow into: a long tail of
+# near-miss titles is a distractor, not context.
+CAPPED="$(AI_MEM_ROOT="$LESSONVAULT" AI_MEM_LESSON_INDEX_LIMIT=1 zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_lesson_index
+')"
+has   "$CAPPED" "gamma-lesson"  "lesson index keeps the newest entry when capped"
+hasnt "$CAPPED" "alpha-lesson"  "lesson index drops the stalest entry when capped"
+has   "$CAPPED" "+2 older"      "lesson index says how many it withheld"
+has   "$CAPPED" "(3)"           "lesson index still reports the true total when capped"
+
+# A vault with no lessons yet must add nothing at all to the prompt -- an
+# empty heading is worse than no heading.
+EMPTY_IDX="$(AI_MEM_ROOT="$(mktemp -d)" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_lesson_index
+')"
+is "$EMPTY_IDX" "" "lesson index emits nothing when no lessons exist"
+succeeds 'AI_MEM_ROOT="$(mktemp -d)" zsh -c "
+  source \"'"$REPO_ROOT"'/shell/ai-mem.zsh\"
+  __ai_mem_lesson_index
+"' "lesson index succeeds on a vault with no _lessons directory"
+
 # --- private helpers must survive a Claude Code shell snapshot -----------------
 # Claude Code snapshots the interactive shell and replays it for every
 # agent-run command, dropping every function whose name starts with a single

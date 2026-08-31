@@ -354,6 +354,35 @@ a character class.)
 logs -- `ai-mem-search postgres checkout-api`. Unknown project names fail
 explicitly rather than silently searching everything.
 
+### Lessons are indexed, not injected
+
+`ai-lesson` writes to `_lessons/<topic-slug>.md`, and those entries are the
+most reusable thing in the vault -- they are the only notes that are true
+across projects. They are also the hardest for an agent to find, because
+finding one by search means guessing a term for knowledge it does not know
+it has.
+
+So the launch prompt lists **every lesson slug and no lesson bodies**:
+
+```text
+- Lessons already recorded (96), listed by topic slug only -- the bodies are NOT
+  included here. If one looks relevant to the task at hand, read it with
+  `ai-mem-search <slug>` before solving the problem again from scratch.
+  prisma-connection-pool-exhaustion, decimal-money-precision-js, react-hydration-mismatch, ...
+```
+
+A slug is the lesson already compressed: `prisma-connection-pool-exhaustion`
+tells you whether to open it without opening it. That is the trade -- roughly
+8 tokens per lesson to convert a blind guess into a precise search. 96
+lessons cost about 830 tokens.
+
+Newest first, capped at `AI_MEM_LESSON_INDEX_LIMIT` (200), with a `+N older`
+note when it truncates. The cap is not decoration: past a few hundred
+entries, most titles are irrelevant to any given session, and a long tail of
+near-miss titles is the most damaging kind of distractor for a model -- the
+same reason `ai-mem-search` bounds its own output. A vault with no lessons
+adds nothing to the prompt at all.
+
 ### What it deliberately is not
 
 Substring matching, not word matching: `git` also hits `github` and
@@ -524,6 +553,7 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_ROOT` | `$HOME/.ai-memory/_Ai_Memory` | Vault root. Point at any folder, including an existing Obsidian vault |
 | `AI_MEM_AGENTS` | `claude codex gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
+| `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_SEARCH_LIMIT` | `40` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
 
 ## Why plain files
