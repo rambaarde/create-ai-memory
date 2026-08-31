@@ -542,6 +542,67 @@ AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 
+# --- mirrored notes contribute only what differs ------------------------------
+# _Standards.md ships declaring `mirror_of: _Global_Profile.md`. Injecting both
+# in full restates text the model just read: measured on a real vault, 72 of
+# the mirror's 80 unique lines were already verbatim in the source.
+MIRRORVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$MIRRORVAULT"
+print -rl -- "---" "type: source" "---" "shared line one" "shared line two" > "$MIRRORVAULT/src.md"
+print -rl -- "---" "type: mirror" "mirror_of: src.md" "---" "shared line one" "shared line two" \
+  "ONLY-IN-MIRROR" > "$MIRRORVAULT/mirror.md"
+
+MIRROR_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/mirror.md"
+')"
+has   "$MIRROR_OUT" "ONLY-IN-MIRROR" "a mirrored note still contributes the lines that differ"
+hasnt "$MIRROR_OUT" "shared line one" "a mirrored note drops lines already present in its source"
+has   "$MIRROR_OUT" "mirror of src.md" "a mirrored note says what it is a mirror of, so the elision is visible"
+
+# A note with no mirror_of must be untouched -- this is the pre-existing
+# behavior every other caller depends on.
+PLAIN_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/src.md"
+')"
+has "$PLAIN_OUT" "shared line one" "a note without mirror_of is injected in full"
+has "$PLAIN_OUT" "shared line two" "a note without mirror_of keeps every line"
+
+# Fail OPEN everywhere: injecting twice costs tokens, dropping a note costs
+# the agent context it was promised.
+print -rl -- "---" "mirror_of: does-not-exist.md" "---" "content survives" > "$MIRRORVAULT/broken.md"
+BROKEN_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/broken.md"
+')"
+has "$BROKEN_OUT" "content survives" "a mirror pointing at a missing source is injected in full, not dropped"
+
+print -rl -- "---" "mirror_of: ../../../etc/hosts" "---" "content survives" > "$MIRRORVAULT/escape.md"
+ESCAPE_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/escape.md"
+' 2>/dev/null)"
+has   "$ESCAPE_OUT" "content survives" "a mirror_of pointing outside the vault is refused and the note injected in full"
+hasnt "$ESCAPE_OUT" "mirror of"       "a mirror_of containing a path separator is not honored at all"
+
+# `mirror_of:` written in prose must not be mistaken for a declaration.
+print -rl -- "---" "type: note" "---" "we could use mirror_of: src.md here" "real content" \
+  > "$MIRRORVAULT/prose.md"
+PROSE_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/prose.md"
+')"
+has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not from a note's prose"
+
+# --- zsh's `path` is $PATH ----------------------------------------------------
+# `local path=...` in a zsh function replaces the special array tied to $PATH
+# with a scalar, so every external command inside that function becomes
+# "command not found". __ai_mem_guard survived it only by using nothing but
+# builtins; adding one grep would have broken it silently.
+LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
+is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
+
 # --- lesson index: names at launch, bodies only on request --------------------
 # The agent cannot search for what it does not know exists, so the slugs are
 # injected; the bodies never are.
