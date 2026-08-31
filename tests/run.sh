@@ -381,6 +381,7 @@ LINTVAULT="$(mktemp -d)"
 mkdir -p "$LINTVAULT/_session_logs/lintproj" "$LINTVAULT/_projects"
 cat > "$LINTVAULT/_session_logs/lintproj/lintproj-2026-08-28_10-00-00.md" <<'EOF'
 ---
+type: ai-session-log
 date: 2026-08-28
 project: "[[lintproj]]"
 previous: ""
@@ -541,6 +542,125 @@ PERF_ELAPSED=$(( $(date +%s) - PERF_START ))
 AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
+
+# --- Open Knowledge Format: every note declares a `type` -----------------------
+# OKF names exactly one required frontmatter field. Every shipped template
+# declared one except the session log, so a vault in real use accumulates
+# hundreds of non-conforming notes.
+for tmpl in _Global_Profile.md _Standards.md _projects/_project_template.md \
+            _lessons/_lesson_template.md _session_logs/_session_template.md; do
+  if grep -qm1 '^type: ' "$REPO_ROOT/vault-template/$tmpl"; then
+    ok "shipped template declares a type: $tmpl"
+  else
+    nok "shipped template declares a type: $tmpl (missing)"
+  fi
+done
+
+OKFVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$OKFVAULT" "$REPO_ROOT/install.sh" >/dev/null
+NEWLOG="$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  cd "'"$WORK"'"
+  __ai_mem_today_session_log okfproj
+')"
+has "$(<"$NEWLOG")" "type: ai-session-log" "a freshly created session log declares its type"
+
+# A vault predating the field: lint must report it, --fix must repair it.
+LEGACY="$OKFVAULT/_session_logs/okfproj/legacy-2020-01-01_00-00-00.md"
+print -rl -- "---" "date: 2020-01-01" 'project: "[[okfproj]]"' "---" "legacy body" > "$LEGACY"
+LINT_OUT="$(AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint
+' 2>&1 || true)"
+has "$LINT_OUT" "missing the \`type:\`" "lint reports session logs with no type field"
+has "$LINT_OUT" "ai-mem-lint --fix"      "lint names the command that repairs them"
+
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+has "$(<"$LEGACY")" "type: ai-session-log" "--fix backfills the type field"
+has "$(<"$LEGACY")" "legacy body"          "--fix preserves the note's existing content"
+has "$(<"$LEGACY")" "date: 2020-01-01"     "--fix preserves the note's existing frontmatter"
+is  "$(grep -c '^type: ' "$LEGACY")" "1"   "--fix adds exactly one type field"
+
+# Idempotent: running it twice must not stack a second field.
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+is "$(grep -c '^type: ' "$LEGACY")" "1" "--fix is idempotent, not additive"
+
+# A log with no frontmatter at all gets a whole block, not a stray line.
+BARE="$OKFVAULT/_session_logs/okfproj/bare-2020-01-02_00-00-00.md"
+print -r -- "just a body, no frontmatter" > "$BARE"
+AI_MEM_ROOT="$OKFVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' >/dev/null 2>&1 || true
+is "$(head -1 "$BARE")" "---" "--fix opens a frontmatter block when a note had none"
+has "$(<"$BARE")" "just a body" "--fix keeps the body of a note that had no frontmatter"
+
+# --- mirrored notes contribute only what differs ------------------------------
+# _Standards.md ships declaring `mirror_of: _Global_Profile.md`. Injecting both
+# in full restates text the model just read: measured on a real vault, 72 of
+# the mirror's 80 unique lines were already verbatim in the source.
+MIRRORVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$MIRRORVAULT"
+print -rl -- "---" "type: source" "---" "shared line one" "shared line two" > "$MIRRORVAULT/src.md"
+print -rl -- "---" "type: mirror" "mirror_of: src.md" "---" "shared line one" "shared line two" \
+  "ONLY-IN-MIRROR" > "$MIRRORVAULT/mirror.md"
+
+MIRROR_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/mirror.md"
+')"
+has   "$MIRROR_OUT" "ONLY-IN-MIRROR" "a mirrored note still contributes the lines that differ"
+hasnt "$MIRROR_OUT" "shared line one" "a mirrored note drops lines already present in its source"
+has   "$MIRROR_OUT" "mirror of src.md" "a mirrored note says what it is a mirror of, so the elision is visible"
+
+# A note with no mirror_of must be untouched -- this is the pre-existing
+# behavior every other caller depends on.
+PLAIN_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/src.md"
+')"
+has "$PLAIN_OUT" "shared line one" "a note without mirror_of is injected in full"
+has "$PLAIN_OUT" "shared line two" "a note without mirror_of keeps every line"
+
+# Fail OPEN everywhere: injecting twice costs tokens, dropping a note costs
+# the agent context it was promised.
+print -rl -- "---" "mirror_of: does-not-exist.md" "---" "content survives" > "$MIRRORVAULT/broken.md"
+BROKEN_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/broken.md"
+')"
+has "$BROKEN_OUT" "content survives" "a mirror pointing at a missing source is injected in full, not dropped"
+
+print -rl -- "---" "mirror_of: ../../../etc/hosts" "---" "content survives" > "$MIRRORVAULT/escape.md"
+ESCAPE_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/escape.md"
+' 2>/dev/null)"
+has   "$ESCAPE_OUT" "content survives" "a mirror_of pointing outside the vault is refused and the note injected in full"
+hasnt "$ESCAPE_OUT" "mirror of"       "a mirror_of containing a path separator is not honored at all"
+
+# `mirror_of:` written in prose must not be mistaken for a declaration.
+print -rl -- "---" "type: note" "---" "we could use mirror_of: src.md here" "real content" \
+  > "$MIRRORVAULT/prose.md"
+PROSE_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_note_contents "$AI_MEM_ROOT/prose.md"
+')"
+has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not from a note's prose"
+
+# --- zsh's `path` is $PATH ----------------------------------------------------
+# `local path=...` in a zsh function replaces the special array tied to $PATH
+# with a scalar, so every external command inside that function becomes
+# "command not found". __ai_mem_guard survived it only by using nothing but
+# builtins; adding one grep would have broken it silently.
+LOCAL_PATH_DEFS="$(grep -rnE '^[[:space:]]*local path=' "$REPO_ROOT/shell/" || true)"
+is "$LOCAL_PATH_DEFS" "" "no function declares 'local path', which would shadow zsh's \$PATH array"
 
 # --- lesson index: names at launch, bodies only on request --------------------
 # The agent cannot search for what it does not know exists, so the slugs are

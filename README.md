@@ -189,6 +189,7 @@ off last time.
 **Getting started**
 
 - [Quickstart](#quickstart)
+- [Benchmarks](#benchmarks)
 - [Install](#install)
 - [Commands](#commands)
 - [How search works](#how-search-works)
@@ -200,6 +201,7 @@ off last time.
 
 - [Session skills](#session-skills-optional)
 - [Your vault](#your-vault)
+- [Open Knowledge Format](#open-knowledge-format)
 - [Add another agent](#add-another-agent)
 - [Integrations](#integrations)
 - [Configuration](#configuration)
@@ -233,6 +235,60 @@ off last time.
 | **Obsidian-native** | The vault is plain Markdown, so it opens as an Obsidian second brain with graph view and backlinks, or as plain files with grep. |
 | **Guardrails built in** | Every write is checked to stay inside the vault, and a commit hook refuses commits made without the vault context loaded. |
 | **Zero runtime deps** | No daemon, no database, no API key, no server. It runs in your shell. |
+
+## Benchmarks
+
+Measured on a real 495-note vault (4.9 MB of Markdown), macOS, warm cache.
+Every number below is reproducible with the command beside it.
+
+**Tokens** — what the agent pays, every session
+
+| | before | after | |
+|---|---|---|---|
+| Launch prompt | 7,207 | **4,321** | −40%, mirrored notes injected once ([why](#mirrored-notes-are-not-injected-twice)) |
+| Search result, common term | 10,234 | **1,752** | −83%, bounded output ([why](#how-search-works)) |
+| Lesson index, 96 lessons | — | **+829** | ~8 tokens per lesson, names only ([why](#lessons-are-indexed-not-injected)) |
+
+```sh
+# launch prompt
+ai-context | wc -c            # chars; divide by ~4 for tokens
+# search output, bounded vs not
+ai-mem-search postgres | wc -c
+AI_MEM_SEARCH_LIMIT=999999 ai-mem-search postgres | wc -c
+```
+
+**Speed**
+
+| | |
+|---|---|
+| Search, common term, 238 hits | **0.07 s** |
+| Shell startup cost of the module | **< 0.01 s** |
+| Recency sort, v0.11.0 regression fix | 25.4 s → **0.54 s** (47×) |
+
+```sh
+time ai-mem-search postgres >/dev/null
+time zsh -c 'source shell/ai-mem.zsh'
+```
+
+The 47× is worth stating plainly because it was self-inflicted. The sort
+spawned two subprocesses per matched line -- about 18,000 processes for one
+query -- while the `grep` underneath it took 0.16 s. Benchmarking `grep`
+alone said the command was fast; benchmarking the command said otherwise.
+A regression guard now bounds it, with the bound set by measuring both
+implementations rather than guessing.
+
+**Footprint**
+
+| | |
+|---|---|
+| Runtime dependencies | **0** |
+| Package | **35 kB** (99.7 kB unpacked, 19 files) |
+| Index, daemon, database, embeddings | **none** — a note is searchable the moment it is written |
+| Tests | **153**, no network, no framework |
+
+```sh
+npm pack --dry-run && zsh tests/run.sh
+```
 
 ## Install
 
@@ -276,7 +332,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
-| `ai-mem-lint` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes |
+| `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
 | `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 40) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
@@ -289,6 +345,35 @@ There is no index to rebuild, no daemon to keep running, no embeddings to
 regenerate, and nothing to go stale -- a note is searchable the moment it is
 written. Every flag below exists because the alternative produced a wrong
 answer on a real vault.
+
+```mermaid
+flowchart TD
+    A["ai-mem-search &lt;term&gt; [project]"] --> B{"scope"}
+    B -->|"no project arg"| C["whole vault<br/>projects · lessons · logs · proposals"]
+    B -->|"project arg"| D["that project's session logs only"]
+    C --> E["grep -rniF<br/><b>-i</b> casing is not a false empty<br/><b>-F</b> a stray dot or paren matches itself"]
+    D --> E
+    E -->|"0 hits"| Z["<b>no matches for 'term' in &lt;root&gt;</b><br/>exit 1 — an empty result says so plainly"]
+    E -->|"n hits"| F["awk · lift YYYY-MM-DD_HH-MM-SS<br/>out of each path into a sort key"]
+    F --> G["sort -r · newest first<br/>undated notes sort last"]
+    G --> H["head -n AI_MEM_SEARCH_LIMIT<br/>default 40"]
+    H --> I["strip the vault root · clamp lines past 200 chars"]
+    I --> J["<b>count first</b>, then results,<br/>then 'N hidden' + how to narrow"]
+    F -.->|"scan matched lines for wikilinks"| K["one hop out<br/>resolve each to its project note<br/>+ a one-line excerpt"]
+    J --> L(["what the agent reads"])
+    K --> L
+
+    classDef term fill:#0d9488,stroke:#0f766e,color:#fff
+    classDef guard fill:#b45309,stroke:#92400e,color:#fff
+    classDef out fill:#1e3a8a,stroke:#1e40af,color:#fff
+    class A term
+    class Z guard
+    class L out
+```
+
+Every stage exists to stop one specific wrong answer, and the two shaded
+boxes are the ones that matter most: an empty result that is *honest*, and
+an output an agent can read to the end.
 
 ```console
 $ ai-mem-search prisma
@@ -353,6 +438,36 @@ a character class.)
 **Scoping.** A second argument restricts the search to one project's session
 logs -- `ai-mem-search postgres checkout-api`. Unknown project names fail
 explicitly rather than silently searching everything.
+
+### Mirrored notes are not injected twice
+
+`_Standards.md` ships declaring `mirror_of: _Global_Profile.md` in its
+frontmatter. The mirror exists so the shared rules stay visible wherever only
+one of the two notes is read -- but the launch prompt reads *both*, so
+injecting both in full restates text the model has just finished reading.
+
+When a note declares `mirror_of: <sibling note>`, only the lines that
+actually differ from that source are injected, under a one-line marker
+naming what was elided:
+
+```text
+- Standards:
+(mirror of _Global_Profile.md, shown above -- only the lines that differ from it are repeated here)
+## Standards Addendum
+* Keep `_Standards.md` and `_Global_Profile.md` in lockstep when shared rules change.
+...
+```
+
+Measured on a real vault: 72 of the mirror's 80 unique lines were already
+verbatim in its source, and the launch prompt went from **~7,200 to ~4,300
+tokens -- a 40% cut with nothing lost**, paid once per session per agent.
+
+Matching is exact, line by line, so anything reworded is kept -- a near-match
+is a real edit. The comparison fails **open** in every uncertain case: no
+frontmatter, a missing source, a `mirror_of` containing a path separator, or
+a diff that would leave nothing all inject the note in full. Injecting a note
+twice costs tokens; dropping one costs the agent context it was promised, and
+those are not the same kind of mistake.
 
 ### Lessons are indexed, not injected
 
@@ -485,6 +600,44 @@ $AI_MEM_ROOT/
 Notes are created from templates on first use and never overwritten. Edit
 `_Global_Profile.md` and `_Standards.md` to make them yours; the shipped versions
 are sanitized placeholders.
+
+## Open Knowledge Format
+
+The vault is close to [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)
+(OKF) — Google's open spec for portable, agent-readable knowledge — mostly by
+convergence rather than adoption. Both bet on the same thing: plain Markdown
+in a directory tree, in git, with no runtime.
+
+| OKF expects | Here |
+|---|---|
+| Markdown files in a directory hierarchy | ✅ `_projects/`, `_lessons/`, `_session_logs/`, `_proposals/` |
+| YAML frontmatter | ✅ every note |
+| **A `type` field — the only required one** | ✅ `ai-project-context`, `ai-lesson`, `ai-session-log`, `ai-global-profile`, `ai-standards` |
+| Cross-links forming a graph | ⚠️ via `[[wikilink]]`, not `[text](path.md)` |
+| An `index.md` per directory | ❌ not generated |
+| No SDK, no proprietary account, git-versionable | ✅ |
+
+Two deliberate deviations. **Links stay Obsidian-style** — the vault is meant
+to be opened in Obsidian, and the graph view and backlinks are the reason
+many people keep one; `ai-mem-search` resolves `[[wikilinks]]` itself. **No
+`index.md`** because nothing here reads one yet, and a generated index that
+nobody consumes is a file that goes stale.
+
+Session logs predate the `type` field, so a vault that has been in use holds
+notes without it. `ai-mem-lint` counts them, and `ai-mem-lint --fix`
+backfills:
+
+```console
+$ ai-mem-lint
+350 session log(s) missing the `type:` frontmatter field (Open Knowledge Format requires it). Fix with: ai-mem-lint --fix
+
+$ ai-mem-lint --fix
+backfilled `type: ai-session-log` into 350 session log(s)
+```
+
+It edits in place, preserves existing frontmatter and body, opens a
+frontmatter block for a note that had none, and is idempotent — running it
+twice does not stack a second field.
 
 ## Add another agent
 
