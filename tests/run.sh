@@ -1038,6 +1038,38 @@ MCPVER="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s.trim().split("\n")[0]).result.serverInfo.version)}catch{}})')"
 hasnt "$MCPVER" "0.0.0" "a freshly installed MCP server reports its real version, not 0.0.0"
 
+# --- shipped source files must stay greppable --------------------------------
+# The viewer used a NUL byte as its code-fence sentinel. Valid in a JavaScript
+# string, but it made the file binary to file(1) and grep: grep matched NOTHING
+# in it and exited 1, silently, which is how a search for its own event
+# handlers came back empty. A project whose pitch is "plain files you can grep"
+# should not ship a source file grep refuses to read.
+# Counted with tr rather than grep: this machine's grep is ugrep, whose -U
+# does not mean what GNU's does, and a check that silently reports the wrong
+# answer is worse than no check -- which is the bug being guarded against.
+VIEWER_BYTES="$(wc -c < "$REPO_ROOT/web/viewer.html" | tr -d ' ')"
+VIEWER_NONNUL="$(LC_ALL=C tr -d '\000' < "$REPO_ROOT/web/viewer.html" | wc -c | tr -d ' ')"
+is "$VIEWER_NONNUL" "$VIEWER_BYTES" "no shipped source file contains a NUL byte"
+
+FENCE_JS="$(mktemp)"
+cat > "$FENCE_JS" <<'FENCEEOF'
+const html = require("fs").readFileSync(process.argv[2], "utf8");
+const mdSrc = html.match(/function md\(src\)[\s\S]*?\n\}/)[0];
+const escSrc = html.match(/const esc = [^\n]*\n/)[0];
+const md = new Function("nodes", escSrc + mdSrc + "; return md;")([]);
+const out = md("before\n\n```js\nconst x = 1;\n```\n\nafter\n");
+const say = (k, v) => console.log(k + "=" + (v ? "yes" : "no"));
+say("fence", /<pre><code>/.test(out));
+say("body", /const x = 1/.test(out));
+say("prose", /before/.test(out) && /after/.test(out));
+say("leak", /FENCE/.test(out));
+FENCEEOF
+FENCE_OUT="$(node "$FENCE_JS" "$REPO_ROOT/web/viewer.html" 2>/dev/null)"
+has "$FENCE_OUT" "fence=yes" "the viewer renders a fenced code block"
+has "$FENCE_OUT" "body=yes"  "the code inside the fence survives"
+has "$FENCE_OUT" "prose=yes" "prose either side of a fence survives"
+has "$FENCE_OUT" "leak=no"   "the fence sentinel never leaks into the output"
+
 # --- the suite must never hijack a browser -----------------------------------
 # ai-mem-serve opens a tab by default, which is right when a person asks to
 # see their memory and wrong every other time. One spawn here predated that
