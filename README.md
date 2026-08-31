@@ -340,40 +340,39 @@ Project is auto-resolved from the current git repo; pass a name to override.
 
 ## How search works
 
-`ai-mem-search` is one `grep -rniF` over the vault, then sort, then a cap.
-There is no index to rebuild, no daemon to keep running, no embeddings to
-regenerate, and nothing to go stale -- a note is searchable the moment it is
-written. Every flag below exists because the alternative produced a wrong
-answer on a real vault.
+Searching the vault reads your notes directly, every time. Nothing is
+prepared in advance: no index to rebuild, no background service, no
+embeddings to regenerate, nothing that can quietly fall out of date. A note
+is findable the second you write it.
 
 ```mermaid
 flowchart TD
-    A["ai-mem-search &lt;term&gt; [project]"] --> B{"scope"}
-    B -->|"no project arg"| C["whole vault<br/>projects · lessons · logs · proposals"]
-    B -->|"project arg"| D["that project's session logs only"]
-    C --> E["grep -rniF<br/><b>-i</b> casing is not a false empty<br/><b>-F</b> a stray dot or paren matches itself"]
+    A(["You look for a word"]) --> B{"Did you name<br/>a project?"}
+    B -->|"no"| C["Look through<br/>every note you have"]
+    B -->|"yes"| D["Look only inside<br/>that project"]
+    C --> E["Read them all.<br/>Capitals don't matter.<br/>Punctuation means itself."]
     D --> E
-    E -->|"0 hits"| Z["<b>no matches for 'term' in &lt;root&gt;</b><br/>exit 1 — an empty result says so plainly"]
-    E -->|"n hits"| F["awk · lift YYYY-MM-DD_HH-MM-SS<br/>out of each path into a sort key"]
-    F --> G["sort -r · newest first<br/>undated notes sort last"]
-    G --> H["head -n AI_MEM_SEARCH_LIMIT<br/>default 40"]
-    H --> I["strip the vault root · clamp lines past 200 chars"]
-    I --> J["<b>count first</b>, then results,<br/>then 'N hidden' + how to narrow"]
-    F -.->|"scan matched lines for wikilinks"| K["one hop out<br/>resolve each to its project note<br/>+ a one-line excerpt"]
-    J --> L(["what the agent reads"])
-    K --> L
+    E -->|"found nothing"| F["<b>Says so, plainly.</b><br/>Never a blank screen you<br/>could mistake for 'none exist'"]
+    E -->|"found something"| G["Newest first"]
+    G --> H["Show the first 40<br/>and say how many more there are"]
+    H --> I["Follow any linked note one step,<br/>with a one-line summary of it"]
+    I --> J(["What you read"])
 
-    classDef term fill:#0d9488,stroke:#0f766e,color:#fff
-    classDef guard fill:#b45309,stroke:#92400e,color:#fff
-    classDef out fill:#1e3a8a,stroke:#1e40af,color:#fff
-    class A term
-    class Z guard
-    class L out
+    classDef ask fill:#0d9488,stroke:#0f766e,color:#fff
+    classDef care fill:#b45309,stroke:#92400e,color:#fff
+    classDef done fill:#1e3a8a,stroke:#1e40af,color:#fff
+    class A ask
+    class F care
+    class J done
 ```
 
-Every stage exists to stop one specific wrong answer, and the two shaded
-boxes are the ones that matter most: an empty result that is *honest*, and
-an output an agent can read to the end.
+Two boxes are shaded because they are the ones that matter: an empty result
+that **says** it is empty, and an output short enough to read to the end.
+
+That is the whole idea. The rest of this section is the mechanism -- one
+`grep -rniF`, then a sort, then a cap -- and why each piece is the way it is.
+Every flag exists because the alternative produced a wrong answer on a real
+vault. Skip it unless you are changing the code.
 
 ```console
 $ ai-mem-search prisma
