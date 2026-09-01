@@ -1038,6 +1038,55 @@ MCPVER="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s.trim().split("\n")[0]).result.serverInfo.version)}catch{}})')"
 hasnt "$MCPVER" "0.0.0" "a freshly installed MCP server reports its real version, not 0.0.0"
 
+# --- a backup only counts if the remote has it -------------------------------
+# "pushed" used to mean "HEAD moved", which is what a COMMIT does. The push is
+# best-effort and swallows its errors, so a commit that never left the machine
+# still reported success. Observed for real: three commits sat unpushed for an
+# hour while every backup said "pushed", because the credential in use had
+# lost access to the vault repo.
+UNREACHABLE="$(mktemp -d)"
+git -C "$UNREACHABLE" init -q
+git -C "$UNREACHABLE" config user.email t@t.com
+git -C "$UNREACHABLE" config user.name t
+print -r -- "first" > "$UNREACHABLE/a.md"
+git -C "$UNREACHABLE" add -A && git -C "$UNREACHABLE" commit -qm init
+git -C "$UNREACHABLE" remote add origin https://example.invalid/nope.git
+git -C "$UNREACHABLE" update-ref refs/remotes/origin/main HEAD
+git -C "$UNREACHABLE" branch -u origin/main >/dev/null 2>&1
+print -r -- "second" > "$UNREACHABLE/b.md"
+
+UNREACHABLE_OUT="$(AI_MEM_ROOT="$UNREACHABLE" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-vault-backup' 2>&1)"
+UNREACHABLE_CODE=$?
+has   "$UNREACHABLE_OUT" "NOT PUSHED"  "a backup whose push failed says so instead of claiming success"
+hasnt "$UNREACHABLE_OUT" ": pushed"    "a failed push is never reported as pushed"
+has   "$UNREACHABLE_OUT" "push"        "the failure names the command to run by hand"
+if AI_MEM_ROOT="$UNREACHABLE" zsh -c '
+     source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+     ai-mem-vault-backup' >/dev/null 2>&1; then
+  nok "a backup whose push failed exits non-zero"
+else
+  ok "a backup whose push failed exits non-zero"
+fi
+
+# A vault that is genuinely in sync must still report plainly, not cry wolf.
+SYNCED="$(mktemp -d)"; SYNCED_REMOTE="$(mktemp -d)"
+git -C "$SYNCED_REMOTE" init -q --bare
+git -C "$SYNCED" init -q
+git -C "$SYNCED" config user.email t@t.com
+git -C "$SYNCED" config user.name t
+print -r -- "x" > "$SYNCED/a.md"
+git -C "$SYNCED" add -A && git -C "$SYNCED" commit -qm init
+git -C "$SYNCED" remote add origin "$SYNCED_REMOTE"
+git -C "$SYNCED" push -q -u origin HEAD >/dev/null 2>&1
+print -r -- "y" > "$SYNCED/b.md"
+SYNCED_OUT="$(AI_MEM_ROOT="$SYNCED" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-vault-backup' 2>&1)"
+has   "$SYNCED_OUT" "pushed"     "a backup that really did reach the remote reports pushed"
+hasnt "$SYNCED_OUT" "NOT PUSHED" "a successful backup does not warn"
+
 # --- shipped source files must stay greppable --------------------------------
 # The viewer used a NUL byte as its code-fence sentinel. Valid in a JavaScript
 # string, but it made the file binary to file(1) and grep: grep matched NOTHING
