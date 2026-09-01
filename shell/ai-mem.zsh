@@ -139,11 +139,46 @@ ai-mem-vault-backup() {
     after="$(git -C "${AI_MEM_ROOT:-}" rev-parse HEAD 2>/dev/null || true)"
     if [[ -z "$before" && -z "$after" ]]; then
         echo "ai-mem-vault-backup: vault isn't git-backed, nothing to do"
-    elif [[ "$before" != "$after" ]]; then
-        echo "ai-mem-vault-backup: pushed"
-    else
-        echo "ai-mem-vault-backup: nothing to commit"
+        return 0
     fi
+
+    # "pushed" used to mean "HEAD moved", which is what a COMMIT does. The push
+    # is best-effort and swallows its own errors, so a commit that never left
+    # the machine still reported success -- observed for real: three commits
+    # sat unpushed for an hour while every backup said "pushed", because the
+    # credential in use had lost access to the vault repo.
+    #
+    # Ask the only question that matters: does the remote have what we have.
+    local upstream local_sha remote_sha
+    upstream="$(git -C "$AI_MEM_ROOT" rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)"
+    if [[ -z "$upstream" ]]; then
+        if [[ "$before" != "$after" ]]; then
+            echo "ai-mem-vault-backup: committed, but this branch has no upstream -- nothing was pushed"
+            return 1
+        fi
+        echo "ai-mem-vault-backup: nothing to commit (no upstream configured)"
+        return 0
+    fi
+
+    git -C "$AI_MEM_ROOT" fetch -q origin 2>/dev/null
+    local_sha="$(git -C "$AI_MEM_ROOT" rev-parse HEAD 2>/dev/null || true)"
+    remote_sha="$(git -C "$AI_MEM_ROOT" rev-parse '@{u}' 2>/dev/null || true)"
+
+    if [[ -n "$local_sha" && "$local_sha" == "$remote_sha" ]]; then
+        if [[ "$before" != "$after" ]]; then
+            echo "ai-mem-vault-backup: pushed"
+        else
+            echo "ai-mem-vault-backup: nothing to commit"
+        fi
+        return 0
+    fi
+
+    local ahead
+    ahead="$(git -C "$AI_MEM_ROOT" rev-list --count '@{u}..HEAD' 2>/dev/null || echo '?')"
+    print -r -- "ai-mem-vault-backup: NOT PUSHED -- $ahead commit(s) exist only on this machine." >&2
+    print -r -- "  The vault is committed locally but the remote does not have it. Check credentials and push by hand:" >&2
+    print -r -- "  git -C \"$AI_MEM_ROOT\" push" >&2
+    return 1
 }
 # Read a vault note only when it exists inside the memory root.
 #
