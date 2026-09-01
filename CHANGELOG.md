@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.7](https://github.com/rambaarde/create-ai-memory/compare/v0.14.6...v0.14.7) (2026-09-01)
+
+
+### Bug Fixes
+
+* **backup:** report pushed only when the remote actually has it ([e93026d](https://github.com/rambaarde/create-ai-memory/commit/e93026dad8b1f43fbf244bda824dc4160a1b505f))
+* **backup:** report pushed only when the remote actually has it ([c36dc2e](https://github.com/rambaarde/create-ai-memory/commit/c36dc2e42d350519451bc7b60cdc753e59fd1de1))
+* **backup:** report pushed only when the remote actually has it ([25f4ac4](https://github.com/rambaarde/create-ai-memory/commit/25f4ac4430789a0a24a3172e3f5fcb0b79065511))
+
 ## [0.14.6](https://github.com/rambaarde/create-ai-memory/compare/v0.14.5...v0.14.6) (2026-08-31)
 
 
