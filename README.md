@@ -214,7 +214,7 @@ Every number below is reproducible with the command beside it.
 
 | | before | after | |
 |---|---|---|---|
-| Launch prompt | 7,207 | **4,321** | −40%, mirrored notes injected once ([why](#mirrored-notes-are-not-injected-twice)) |
+| Launch prompt | 7,207 | **4,046** | −44%, mirrored notes injected once ([why](#mirrored-notes-are-not-injected-twice)) and inlined notes capped ([why](#every-path-into-the-prompt-is-bounded)) |
 | Search result, common term | 10,234 | **1,752** | −83%, bounded output ([why](#how-search-works)) |
 | Lesson index, 96 lessons | — | **+829** | ~8 tokens per lesson, names only ([why](#lessons-are-indexed-not-injected)) |
 
@@ -439,6 +439,35 @@ Matching is exact and line-by-line, so anything reworded survives. It fails
 **open** — no frontmatter, a missing source, or an empty diff all inject the
 note in full. Injecting twice costs tokens; dropping a note costs the agent
 context it was promised.
+
+### Every path into the prompt is bounded
+
+The launch prompt is paid **every session, in every project**, so anything
+that can grow without limit is a cost that compounds silently.
+
+| what reaches the prompt | bound |
+|---|---|
+| Profile and standards | **8,000 chars** each (`AI_MEM_NOTE_MAX_CHARS`) |
+| Previous session outcome | 4 fields, 500 chars each |
+| Lesson index | 200 slugs, names only |
+| Project note | **a path, not its contents** |
+| `ai-mem-search` output | flat: 765 matches cost the same as 240 |
+
+The profile was the one exception. It grew to 12,405 chars and pushed the
+launch prompt from 4,321 tokens to 5,125 without anything reporting it —
+a 19% rise nobody asked for. Capping it brought it to **4,046**.
+
+Truncation always states the real total and where to read the rest:
+
+```text
+[truncated at 8000 of 12405 chars -- read the rest with: cat "…/_Global_Profile.md"]
+```
+
+That line matters more than the saving. A truncated note the agent cannot
+distinguish from a complete one is worse than a long one: it would answer
+from half a profile believing it had all of it. The cut also lands on a line
+boundary, because Markdown severed mid-line can leave half a heading or an
+unterminated code fence, which reads as content rather than as damage.
 
 ### Lessons are indexed, not injected
 
@@ -723,6 +752,7 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_AGENTS` | `claude codex agy gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
+| `AI_MEM_NOTE_MAX_CHARS` | `8000` | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
 | `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
 | `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
 

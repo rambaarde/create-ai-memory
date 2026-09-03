@@ -195,6 +195,38 @@ ai-mem-vault-backup() {
 # target, a target outside the vault, or a diff that would leave nothing --
 # because injecting a note twice merely costs tokens, while dropping one
 # costs the agent context it was promised.
+# Bound what a single note can contribute to the launch prompt.
+#
+# Every other path into the prompt is already bounded: session-log fields at
+# 500 chars each, the lesson index at 200 slugs, search output at a flat cap,
+# and the project note is a path rather than its contents. The inlined notes
+# were the one exception, so a profile that grows makes EVERY session in
+# EVERY project more expensive, forever, and nothing reports it.
+#
+# Truncation states the real total and where to read the rest, because a
+# truncated note the agent cannot tell from a complete one is worse than a
+# long one -- it would answer from half a profile believing it had all of it.
+#
+# The cut lands on a line boundary. Markdown cut mid-line can leave an
+# unterminated code fence or half a heading, which reads as content rather
+# than as damage.
+__ai_mem_cap_note() {
+    local text="$1" source_ref="${2:-the note}"
+    local cap="${AI_MEM_NOTE_MAX_CHARS:-8000}"
+    # 0 disables the cap outright, for anyone who wants the old behaviour.
+    if (( cap <= 0 )) || (( ${#text} <= cap )); then
+        print -r -- "$text"
+        return 0
+    fi
+    local head_text="${text[1,$cap]}"
+    local trimmed="${head_text%$'\n'*}"
+    # A single line longer than the whole cap leaves nothing after trimming;
+    # keep the hard cut rather than emitting an empty note.
+    [[ -n "${trimmed//[[:space:]]/}" ]] && head_text="$trimmed"
+    print -r -- "$head_text"
+    print -r -- "[truncated at ${cap} of ${#text} chars -- read the rest with: cat \"$source_ref\"]"
+}
+
 __ai_mem_note_contents() {
     local note_path="${1:-}"
     if [[ -z "$note_path" || ! -f "$note_path" ]]; then
@@ -208,7 +240,7 @@ __ai_mem_note_contents() {
     local mirror
     mirror="$(sed -n '2,/^---$/p' "$note_path" 2>/dev/null | sed -n 's/^mirror_of:[[:space:]]*//p' | head -1)"
     if [[ -z "$mirror" ]]; then
-        print -r -- "$(<"$note_path")"
+        __ai_mem_cap_note "$(<"$note_path")" "$note_path"
         return 0
     fi
 
@@ -219,7 +251,7 @@ __ai_mem_note_contents() {
     # every separator outright is both the safer rule and the simpler one.
     local target="$AI_MEM_ROOT/$mirror"
     if [[ "$mirror" == */* || ! -f "$target" ]]; then
-        print -r -- "$(<"$note_path")"
+        __ai_mem_cap_note "$(<"$note_path")" "$note_path"
         return 0
     fi
 
@@ -233,7 +265,7 @@ __ai_mem_note_contents() {
     fi
 
     print -r -- "(mirror of ${mirror}, shown above -- only the lines that differ from it are repeated here)"
-    print -r -- "$unique"
+    __ai_mem_cap_note "$unique" "$note_path"
 }
 
 __ai_mem_resolve_project() {
