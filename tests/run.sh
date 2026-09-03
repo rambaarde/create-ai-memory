@@ -45,7 +45,7 @@ CAPTURE="$(mktemp)"
 __ai_adapter_faketest() { print -r -- "$1" > "$CAPTURE"; }
 faketest() { : }            # stub CLI so the missing-agent guard lets faketest through
 __ai_adapter_ghost() { : }   # adapter exists but there is no `ghost` CLI on PATH
-export AI_MEM_AGENTS="claude codex gemini cursor opencode faketest ghost"
+export AI_MEM_AGENTS="claude codex agy gemini cursor opencode faketest ghost"
 typeset -gA AI_MEM_SKILLS
 AI_MEM_SKILLS[terse]='Use terse output this session?::Respond tersely; drop filler.'
 AI_MEM_SKILL_ORDER=(terse)
@@ -262,6 +262,30 @@ ai-lesson "../../etc/evil" "problem" "should not escape the vault" >/dev/null
 is "$(find "$AI_MEM_ROOT" -name 'evil.md' -o -name '*passwd*' 2>/dev/null)" "" \
   "ai-lesson cannot path-traverse out of _lessons/ via a crafted topic"
 exists "$AI_MEM_ROOT/_lessons/etc-evil.md" "a crafted topic is slugified flat, not treated as a path"
+
+# --- 9b. agy (Antigravity) adapter -------------------------------------------
+# agy replaced the Gemini CLI in practice. Its --prompt is an alias for
+# --print, which runs one turn and exits; a launcher must open a session the
+# developer keeps working in, so the adapter has to use -i. Stubbed, because
+# agy is a real binary here and an unstubbed call would start a session.
+AGY_CAPTURE="$(mktemp)"
+agy() { printf "%s\n" "$*" > "$AGY_CAPTURE"; }
+__ai_adapter_agy "AGY MEMORY PROMPT" "" </dev/null
+has "$(<"$AGY_CAPTURE")" "--add-dir"         "agy adapter grants the vault with --add-dir"
+has "$(<"$AGY_CAPTURE")" "$AI_MEM_ROOT"      "agy adapter passes the vault path"
+has "$(<"$AGY_CAPTURE")" "AGY MEMORY PROMPT" "agy adapter hands over the memory prompt"
+has "$(<"$AGY_CAPTURE")" "-i"                "agy adapter opens an interactive session, not a one-shot print"
+hasnt "$(<"$AGY_CAPTURE")" "--print"         "agy adapter never uses print mode, which would exit after one turn"
+unset -f agy
+
+# The suite pins its own AI_MEM_AGENTS above, so assert the SHIPPED default
+# instead: without agy in it, a real user gets "command not found" from
+# agy-start with no sign that an adapter exists.
+has "$(<"$REPO_ROOT/shell/ai-mem.zsh")" "AI_MEM_AGENTS:=claude codex agy" \
+   "agy is in the shipped default AI_MEM_AGENTS"
+typeset -f agy-start >/dev/null \
+  && ok "agy-start is generated" \
+  || nok "agy-start is generated"
 
 # --- 10. cursor adapter: prompt to cursor-agent, skills to the rule file ------
 # cursor has no headless prompt path; the adapter persists the session's skills

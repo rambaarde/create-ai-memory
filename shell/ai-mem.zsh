@@ -757,7 +757,7 @@ __ai_session_start() {
 # registered agent that has a matching adapter. Users extend by appending to
 # AI_MEM_AGENTS (space-separated) and defining __ai_adapter_<name>.
 source "$AI_MEM_HOME/adapters.zsh"
-: "${AI_MEM_AGENTS:=claude codex gemini cursor opencode}"
+: "${AI_MEM_AGENTS:=claude codex agy gemini cursor opencode}"
 for _ai_agent in ${(z)AI_MEM_AGENTS}; do
     if typeset -f "__ai_adapter_$_ai_agent" >/dev/null; then
         # A same-named alias (e.g. from another plugin) makes zsh refuse to

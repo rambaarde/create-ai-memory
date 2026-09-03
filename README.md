@@ -131,7 +131,7 @@ exec zsh
 Then, from inside any git repo:
 
 ```sh
-claude-start                    # or codex-start / gemini-start / cursor-start / opencode-start
+claude-start                    # or codex-start / agy-start / cursor-start / opencode-start
 ```
 
 The agent opens already knowing your standards, this project, and where you left
@@ -297,7 +297,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 
 | Command | What it does |
 |---|---|
-| `claude-start` · `codex-start` · `gemini-start` · `cursor-start` · `opencode-start` | Launch an agent with full vault context and the session-skill picker |
+| `claude-start` · `codex-start` · `agy-start` · `gemini-start` · `cursor-start` · `opencode-start` | Launch an agent with full vault context and the session-skill picker |
 | `ai-start [project]` | Prepare the session (project note and fresh log) without launching an agent |
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
@@ -590,8 +590,14 @@ Edits in place, preserves frontmatter and body, idempotent.
 ## Add another agent
 
 Launchers are not hardcoded. Each agent is one small adapter, and the
-`<name>-start` function is generated for you. `claude`, `codex`, `gemini`,
-`cursor`, and `opencode` ship built in. To add `aider`:
+`<name>-start` function is generated for you. `claude`, `codex`, `agy`,
+`gemini`, `cursor`, and `opencode` ship built in.
+
+`agy` is the [Antigravity CLI](https://antigravity.google), which in practice
+has replaced the Gemini CLI. Both adapters ship: `gemini-start` still works
+for anyone using it, and `agy-start` is the one to reach for now.
+
+To add `aider`:
 
 1. Define the adapter in `shell/adapters.zsh`. It receives `$1` memory prompt,
    `$2` mode block, and `$3` onward extra args:
@@ -603,7 +609,7 @@ Launchers are not hardcoded. Each agent is one small adapter, and the
    ```
 2. Register it in `~/.zshrc` before sourcing, or edit the default:
    ```zsh
-   export AI_MEM_AGENTS="claude codex gemini cursor opencode aider"
+   export AI_MEM_AGENTS="claude codex agy gemini cursor opencode aider"
    ```
 3. `aider-start` now exists. No core edits.
 
@@ -714,7 +720,7 @@ git -C <repo> config core.hooksPath .githooks
 | Env var | Default | Purpose |
 |---|---|---|
 | `AI_MEM_ROOT` | `$HOME/.ai-memory/_Ai_Memory` | Vault root. Point at any folder, including an existing Obsidian vault |
-| `AI_MEM_AGENTS` | `claude codex gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
+| `AI_MEM_AGENTS` | `claude codex agy gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
