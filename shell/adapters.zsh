@@ -31,6 +31,21 @@ __ai_adapter_gemini() {
     gemini --include-directories "$AI_MEM_ROOT" -i "$memory_prompt"
 }
 
+# Antigravity (agy): Google's successor to the Gemini CLI, installed as the
+# `antigravity-cli` cask with `agy` as its binary. It takes --add-dir like
+# codex and -i for an interactive initial prompt like the Gemini CLI did, so
+# the vault is granted the same way and the session still opens interactively
+# rather than printing one answer and exiting.
+#
+# --prompt on agy is an alias for --print, which runs ONE turn and exits. That
+# is the wrong verb here: a launcher exists to start a session the developer
+# keeps working in, so -i (--prompt-interactive) is the correct flag.
+__ai_adapter_agy() {
+    local memory_prompt="$1"
+    shift 2>/dev/null || true
+    agy --add-dir "$AI_MEM_ROOT" -i "$memory_prompt"
+}
+
 # Cursor ships two entry points. `cursor-agent` is the CLI and takes the
 # prompt positionally, so it gets the vault context like every other agent.
 # `cursor` is the GUI, which has no prompt path -- launching it drops the

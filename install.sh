@@ -72,7 +72,7 @@ banner
 # --- gather settings ---------------------------------------------------------
 AI_MEM_ROOT="${AI_MEM_ROOT:-$HOME/.ai-memory/_Ai_Memory}"
 ask AI_MEM_ROOT   "Where should your memory vault live?" "$AI_MEM_ROOT"
-AI_MEM_AGENTS="${AI_MEM_AGENTS:-claude codex gemini cursor opencode}"
+AI_MEM_AGENTS="${AI_MEM_AGENTS:-claude codex agy gemini cursor opencode}"
 ask AI_MEM_AGENTS "Which agents should get <agent>-start launchers?" "$AI_MEM_AGENTS"
 
 # --- scaffold the vault ------------------------------------------------------
@@ -92,7 +92,7 @@ copy_if_absent "$HERE/vault-template/_lessons/_lesson_template.md"       "$AI_ME
 
 # --- assemble the ~/.zshrc lines ---------------------------------------------
 LINES="export AI_MEM_ROOT=\"$AI_MEM_ROOT\""
-if [ "$AI_MEM_AGENTS" != "claude codex gemini cursor opencode" ]; then
+if [ "$AI_MEM_AGENTS" != "claude codex agy gemini cursor opencode" ]; then
   LINES="$LINES
 export AI_MEM_AGENTS=\"$AI_MEM_AGENTS\""
 fi
@@ -135,7 +135,7 @@ cat <<EOF
            (your memory; safe to back up, sync, or open in Obsidian)
 
   From inside any git repo, run:  claude-start
-  (or codex-start / gemini-start / cursor-start / opencode-start)
+  (or codex-start / agy-start / gemini-start / cursor-start / opencode-start)
 
   Optional integrations: see $HERE/hooks/  and the README.
 EOF
