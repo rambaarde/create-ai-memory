@@ -263,6 +263,49 @@ is "$(find "$AI_MEM_ROOT" -name 'evil.md' -o -name '*passwd*' 2>/dev/null)" "" \
   "ai-lesson cannot path-traverse out of _lessons/ via a crafted topic"
 exists "$AI_MEM_ROOT/_lessons/etc-evil.md" "a crafted topic is slugified flat, not treated as a path"
 
+# --- 9a. inlined notes are bounded -------------------------------------------
+# Every other path into the launch prompt was already capped; the inlined
+# notes were not, so a profile that grows made EVERY session in EVERY project
+# more expensive, forever, with nothing reporting it.
+CAPVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$CAPVAULT"
+BIGNOTE="$CAPVAULT/_Global_Profile.md"
+{ print -r -- "---"; print -r -- "type: reference"; print -r -- "---"
+  for i in {1..600}; do print -r -- "line $i: padding that makes this note long enough to trip the cap"; done
+} > "$BIGNOTE"
+# Measure the way the code does: $(<file) drops the trailing newline, so
+# wc -c reports one byte more than the string the cap actually sees.
+BIGBODY="$(<"$BIGNOTE")"
+BIGLEN=${#BIGBODY}
+
+CAPPED="$(AI_MEM_ROOT="$CAPVAULT" AI_MEM_NOTE_MAX_CHARS=2000 __ai_mem_note_contents "$BIGNOTE")"
+(( ${#CAPPED} < BIGLEN )) && ok "a long inlined note is truncated" \
+                          || nok "a long inlined note is truncated"
+has "$CAPPED" "truncated at 2000 of $BIGLEN chars" \
+   "truncation states the real total, not just that it truncated"
+has "$CAPPED" "$BIGNOTE" "truncation names the path to read the rest"
+# Markdown cut mid-line can leave half a heading or an unterminated fence,
+# which reads as content rather than as damage.
+LASTLINE="$(print -r -- "$CAPPED" | tail -2 | head -1)"
+case "$LASTLINE" in
+  *"padding that makes this note long enough to trip the cap") ok "the cut lands on a line boundary" ;;
+  *) nok "the cut lands on a line boundary (got [$LASTLINE])" ;;
+esac
+
+# Under the cap, nothing is touched: the notice must never appear on a note
+# that fits, or every short profile would look truncated.
+SMALL="$CAPVAULT/_small.md"
+print -r -- "just a short note" > "$SMALL"
+SMALLOUT="$(AI_MEM_ROOT="$CAPVAULT" AI_MEM_NOTE_MAX_CHARS=2000 __ai_mem_note_contents "$SMALL")"
+is "$SMALLOUT" "just a short note" "a note under the cap is passed through untouched"
+hasnt "$SMALLOUT" "truncated at" "a short note carries no truncation notice"
+
+# 0 disables the cap, for anyone who wants the old behaviour back.
+UNCAPPED="$(AI_MEM_ROOT="$CAPVAULT" AI_MEM_NOTE_MAX_CHARS=0 __ai_mem_note_contents "$BIGNOTE")"
+hasnt "$UNCAPPED" "truncated at" "AI_MEM_NOTE_MAX_CHARS=0 disables the cap"
+(( ${#UNCAPPED} > 2000 )) && ok "the uncapped note is returned in full" \
+                          || nok "the uncapped note is returned in full"
+
 # --- 9b. agy (Antigravity) adapter -------------------------------------------
 # agy replaced the Gemini CLI in practice. Its --prompt is an alias for
 # --print, which runs one turn and exits; a launcher must open a session the
