@@ -158,6 +158,7 @@ off last time.
 - [Commands](#commands)
 - [How search works](#how-search-works)
 - [What it costs](#what-it-costs-and-what-it-cannot-do)
+- [Memory hygiene](#memory-hygiene)
 
 </td>
 <td valign="top" width="33%">
@@ -493,6 +494,52 @@ long tail of near-misses is the most damaging kind of distractor for a model.
 
 Returns non-zero on no matches, a missing term, or an unknown project, so
 it composes in a script.
+
+## Memory hygiene
+
+A second brain that only grows, rots. Old session logs bury the recent ones,
+near-duplicate lessons pile up, and a dead `[[link]]` points at a note that is
+no longer there. Search then spends more tokens to return worse results.
+
+create-ai-memory keeps the vault healthy with the two-sided strategy a brain
+uses: it strengthens what gets used and lets the rest fade, but it never throws
+away what was hard to learn.
+
+| move | what it does | command |
+|---|---|---|
+| **Strengthen** | A lesson recalled again ranks higher, not just newer -- long-term potentiation for the vault. | `ai-mem-search` ranking |
+| **Consolidate** | Many session logs about one thing distil into a single durable lesson. | `ai-lesson` |
+| **Decay** | Old session logs move out of the hot search path into `_archive/`, still on disk and in git. | `ai-mem-sleep` |
+| **Prune (detect)** | A dangling `[[wikilink]]` -- a dead edge -- is surfaced, never auto-removed. | `ai-mem-lint` |
+| **Schedule** | Run the whole pass nightly on its own. | `ai-mem-sleep-schedule` |
+
+**One rule is inviolable: a lesson is never pruned.** The failure-to-fix records
+in `_lessons/` are the durable knowledge -- the answer you may need once every
+six months when an old blocker returns -- and pruning by disuse would delete
+exactly those. Only the ephemeral layer (session logs) decays, and even it is
+archived, not deleted. Reinforcement acts on lessons; decay acts on logs; the
+two never cross.
+
+### Where the model comes from
+
+The design is modeled on how a brain manages memory. It is a design analogy,
+not a claim to reproduce the biology. Two ideas guided it:
+
+- **Synaptic pruning and homeostasis.** An infant brain overproduces neural
+  connections, then removes the weak or unused ones from experience -- "use it
+  or lose it" -- which is what keeps it efficient. A vault that only appends is
+  the brain that never prunes.
+- **Long-term potentiation (LTP).** A pathway that fires repeatedly is
+  strengthened. That is the half a naive "drop the old" policy forgets, and the
+  half `ai-mem-search`'s reinforcement adds.
+
+Framing these as one scheduled maintenance pass -- consolidation, decay,
+garbage collection, and graph pruning, run while the agent "sleeps" -- follows
+Andrew Orobator, ["Your Agent Needs a Bedtime"][bedtime], and the wider NeuroAI
+work that applies synaptic pruning to artificial networks. Its rule that error
+recoveries are never pruned is the same rule stated above.
+
+[bedtime]: https://medium.com/@andreworobator/your-agent-needs-a-bedtime-cc594be3f993
 
 ## Session skills (optional)
 
