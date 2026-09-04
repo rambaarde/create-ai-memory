@@ -559,6 +559,56 @@ SLEEP_SEARCH="$(ai-mem-search SLEEPNEEDLE 2>/dev/null)"
 hasnt "$SLEEP_SEARCH" "ancient SLEEPNEEDLE" "ai-mem-search skips archived session logs"
 has   "$SLEEP_SEARCH" "durable SLEEPNEEDLE" "the lesson stays in the hot search path"
 
+# --- 13c. ai-mem-sleep edges: age gate, keep floor, sidecars, idempotence -----
+_SLEEP2_ROOT="$(mktemp -d)/_Ai_Memory"
+export AI_MEM_ROOT="$_SLEEP2_ROOT"
+export AI_MEM_SESSION_DIR="$_SLEEP2_ROOT/_session_logs"
+mkdir -p "$AI_MEM_SESSION_DIR/aged" "$AI_MEM_SESSION_DIR/fresh" \
+         "$AI_MEM_SESSION_DIR/tiny" "$AI_MEM_SESSION_DIR/loose" "$_SLEEP2_ROOT/_lessons"
+# aged: seven ancient logs; the oldest carries a .startsha sidecar.
+for d in 2020-01-01 2020-01-02 2020-01-03 2020-01-04 2020-01-05 2020-01-06 2020-01-07; do
+  echo "aged log" > "$AI_MEM_SESSION_DIR/aged/aged-${d}_10-00-00.md"
+done
+echo "sha" > "$AI_MEM_SESSION_DIR/aged/aged-2020-01-01_10-00-00.startsha"
+# fresh: seven logs, all dated RELATIVE to today so the age gate is tested
+# regardless of when CI runs -- absolute dates would rot into the archive window.
+zmodload zsh/datetime 2>/dev/null
+for off in 5 12 20 30 40 55 65; do
+  fd="$(strftime '%Y-%m-%d' $(( EPOCHSECONDS - off * 86400 )))"
+  echo "fresh log" > "$AI_MEM_SESSION_DIR/fresh/fresh-${fd}_10-00-00.md"
+done
+# tiny: fewer than KEEP, so nothing is eligible however old.
+for d in 2020-01-01 2020-01-02 2020-01-03; do
+  echo "tiny log" > "$AI_MEM_SESSION_DIR/tiny/tiny-${d}_10-00-00.md"
+done
+# loose: six ancient logs plus a non-dated file that sorts past the keep window.
+for d in 2020-01-01 2020-01-02 2020-01-03 2020-01-04 2020-01-05 2020-01-06; do
+  echo "loose log" > "$AI_MEM_SESSION_DIR/loose/loose-${d}_10-00-00.md"
+done
+echo "not a dated log" > "$AI_MEM_SESSION_DIR/loose/0000-loose.md"
+
+SLEEP2_DRY="$(AI_MEM_SLEEP_KEEP=5 AI_MEM_SLEEP_CONSOLIDATE=5 ai-mem-sleep 2>/dev/null)"
+has   "$SLEEP2_DRY" "fresh: 7 hot logs" "ai-mem-sleep flags a busy project as a consolidation candidate"
+hasnt "$SLEEP2_DRY" "tiny: 3 hot logs" "a project below the consolidation threshold is not flagged"
+
+AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
+is "$(find "$AI_MEM_SESSION_DIR/fresh" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "7" \
+  "the age gate keeps recent logs hot even when there are more than KEEP of them"
+is "$(find "$AI_MEM_SESSION_DIR/fresh/_archive" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')" "0" \
+  "an all-recent project has nothing to archive"
+is "$(find "$AI_MEM_SESSION_DIR/aged" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "5" \
+  "the keep floor holds the newest KEEP of an all-old project hot"
+is "$(find "$AI_MEM_SESSION_DIR/aged/_archive" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')" "2" \
+  "the rest of an all-old project is archived"
+exists "$AI_MEM_SESSION_DIR/aged/_archive/aged-2020-01-01_10-00-00.startsha" \
+  "a log's .startsha sidecar follows it into the archive"
+is "$(find "$AI_MEM_SESSION_DIR/tiny" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "3" \
+  "a project with fewer than KEEP logs is left untouched"
+exists "$AI_MEM_SESSION_DIR/loose/0000-loose.md" "a non-dated file is never archived, even past the keep window"
+AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
+is "$(find "$AI_MEM_SESSION_DIR/aged" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "5" \
+  "a second ai-mem-sleep --apply is idempotent"
+
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 # --- 14. ai-mem-search finds text across the vault -----------------------------
 SEARCHVAULT="$(mktemp -d)"

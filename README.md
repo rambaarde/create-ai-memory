@@ -254,7 +254,7 @@ implementations rather than guessing.
 | Runtime dependencies | **0** |
 | Package | **35 kB** (99.7 kB unpacked, 19 files) |
 | Index, daemon, database, embeddings | **none** — a note is searchable the moment it is written |
-| Tests | **281**, no network, no framework |
+| Tests | **291**, no network, no framework |
 
 ```sh
 npm pack --dry-run && zsh tests/run.sh
@@ -836,7 +836,7 @@ generation, adapter dispatch, the commit token, `ai-note`, and the cursor rule
 file.
 
 ```sh
-zsh tests/run.sh     # offline unit tests (281 assertions)
+zsh tests/run.sh     # offline unit tests (291 assertions)
 zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ```
 
