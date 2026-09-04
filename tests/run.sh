@@ -253,6 +253,20 @@ has "$(<"$AI_MEM_ROOT/_lessons/custom-template-check.md")" "CUSTOM-TEMPLATE-MARK
 print -r -- "$LESSON_TEMPLATE_BACKUP" > "$AI_MEM_ROOT/_lessons/_lesson_template.md"
 succeeds 'ai-mem-search "token bucket"' "ai-mem-search already covers _lessons/ with no extra wiring"
 
+# --- 9c. reinforcement (LTP): a lesson recalled more often ranks higher ------
+# The count of dated entries is the reinforcement signal. A first recording is
+# a plain append; a second is the same pathway firing again, which ai-lesson
+# announces and ai-mem-search ranks above a once-seen lesson.
+LTP_FIRST="$(ai-lesson ltp-strong "first hit ZZMARK" "solution one")"
+has "$LTP_FIRST" "Appended to" "a lesson recorded once reports a plain append"
+LTP_SECOND="$(ai-lesson ltp-strong "second hit ZZMARK" "solution two")"
+has "$LTP_SECOND" "Reinforced" "recording the same lesson again reports reinforcement, not a plain append"
+has "$LTP_SECOND" "2 recalls" "the reinforcement message counts how many times the lesson has fired"
+ai-lesson ltp-weak "only hit ZZMARK" "solution only" >/dev/null
+# Both are lessons, so both outrank any log; the twice-recorded one must lead.
+LTP_FIRST_HIT="$(ai-mem-search ZZMARK | grep -oE 'ltp-(strong|weak)' | head -1)"
+is "$LTP_FIRST_HIT" "ltp-strong" "the twice-recalled lesson ranks above the once-recalled one"
+
 LESSON_COUNT_BEFORE="$(find "$AI_MEM_ROOT/_lessons" -type f -name '*.md' | wc -l | tr -d ' ')"
 fails 'ai-lesson "!!!" "problem" "solution"' "ai-lesson rejects a topic that slugifies to nothing"
 is "$(find "$AI_MEM_ROOT/_lessons" -type f -name '*.md' | wc -l | tr -d ' ')" "$LESSON_COUNT_BEFORE" \
