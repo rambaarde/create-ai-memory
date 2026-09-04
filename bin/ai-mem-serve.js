@@ -181,14 +181,24 @@ function buildGraph() {
   const seen = new Set();
   const edges = [];
   for (const n of nodes) {
+    // A wikilink whose basename matches no note is a dead edge. It is still not
+    // drawn to a phantom node -- OKF asks consumers to tolerate links that do
+    // not resolve -- but the COUNT is kept on the source node, so the graph can
+    // mark which notes carry a broken link without inventing targets for them.
+    const danglingSeen = new Set();
     for (const link of n.links) {
       const target = byBasename.get(link);
-      if (!target || target === n.id) continue;
+      if (!target) {
+        if (link && link !== basename(n.id, '.md')) danglingSeen.add(link);
+        continue;
+      }
+      if (target === n.id) continue;
       const key = n.id + ' -> ' + target;
       if (seen.has(key)) continue;
       seen.add(key);
       edges.push({ source: n.id, target });
     }
+    if (danglingSeen.size) n.dangling = danglingSeen.size;
     delete n.links;
   }
   return { vault: VAULT, nodes, edges };
