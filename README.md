@@ -255,7 +255,7 @@ implementations rather than guessing.
 | Runtime dependencies | **0** |
 | Package | **35 kB** (99.7 kB unpacked, 19 files) |
 | Index, daemon, database, embeddings | **none** — a note is searchable the moment it is written |
-| Tests | **303**, no network, no framework |
+| Tests | **305**, no network, no framework |
 
 ```sh
 npm pack --dry-run && zsh tests/run.sh
@@ -721,7 +721,9 @@ ai-mem-serve          # opens a browser at http://127.0.0.1:7777
 Nodes are coloured by `type` and sized by how many notes link to them.
 Selecting one dims everything unconnected and renders the note beside the
 graph. *Durable knowledge* is the default view — session logs usually
-outnumber everything else and bury the rest.
+outnumber everything else and bury the rest. A note carrying a dangling
+`[[link]]` wears a dashed red ring, so a dead edge is visible in the graph as
+well as in the note (where it renders dotted and unclickable).
 
 Loopback only, deliberately: the vault holds project history. Zero
 dependencies — the layout is a small force simulation, not a charting
@@ -884,7 +886,7 @@ generation, adapter dispatch, the commit token, `ai-note`, and the cursor rule
 file.
 
 ```sh
-zsh tests/run.sh     # offline unit tests (303 assertions)
+zsh tests/run.sh     # offline unit tests (305 assertions)
 zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ```
 

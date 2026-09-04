@@ -799,6 +799,8 @@ gfield() { print -r -- "$GJSON" | node -e '
   if(q==="types")     return process.stdout.write(g.nodes.map(n=>n.type).sort().join(","));
   if(q==="tags")      return process.stdout.write((g.nodes.find(n=>n.id.endsWith("demo.md"))||{}).tags.join("|"));
   if(q==="edgepair")  return process.stdout.write(g.edges.map(e=>e.source+">"+e.target).join(","));
+  if(q==="dangle_orphan") return process.stdout.write(String((g.nodes.find(n=>n.id.endsWith("orphan.md"))||{}).dangling||0));
+  if(q==="dangle_demo")   return process.stdout.write(String((g.nodes.find(n=>n.id.endsWith("demo.md"))||{}).dangling||0));
 })' "$1"; }
 
 is "$(gfield nodes)" "3" "graph server returns every note as a node"
@@ -808,6 +810,10 @@ is "$(gfield nodes)" "3" "graph server returns every note as a node"
 is "$(gfield edges)" "1" "graph server drops a wikilink with no matching note"
 has "$(gfield edgepair)" "_projects/demo.md" "graph server resolves a wikilink by basename"
 is "$(gfield tags)" "alpha|beta" "graph server parses an inline frontmatter list"
+# The dead edge is dropped, but its source is flagged so the graph can mark it
+# (a dashed ring in the viewer) rather than lose it silently.
+is "$(gfield dangle_orphan)" "1" "graph server flags a note that carries a dangling link"
+is "$(gfield dangle_demo)" "0" "a note with no dangling link is not flagged"
 
 # Notes are created from templates and inherit the template's heading. Titling
 # by first H1 gave 354 notes the label "Session Outcome" and 34 "Project

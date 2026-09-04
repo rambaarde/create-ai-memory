@@ -18,6 +18,7 @@
   --ink-2: #55514b;
   --ink-3: #8a857d;
   --accent: #b45309;
+  --warn: #b3261e;
   --edge: #cfcac2;
   --shadow: 0 1px 2px rgba(28,27,25,.05), 0 8px 24px rgba(28,27,25,.06);
   --radius: 8px;
@@ -34,6 +35,7 @@
     --ink-2: #a8a49d;
     --ink-3: #736f68;
     --accent: #f59e0b;
+    --warn: #f0806c;
     --edge: #3a3743;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
   }
@@ -410,6 +412,21 @@ function draw() {
     ctx.fillStyle = colorFor(n.type);
     ctx.fill();
 
+    // A dashed warn-coloured ring marks a note that carries a dangling link --
+    // a [[link]] pointing at no note. The dead edge is not drawn (there is no
+    // target to draw it to), but the source is flagged, so graph pruning is
+    // visible here as well as in the note panel, without inventing phantoms.
+    if (n.dangling) {
+      ctx.save();
+      ctx.strokeStyle = css('--warn');
+      ctx.lineWidth = 1.6 / view.k;
+      ctx.setLineDash([3 / view.k, 2.5 / view.k]);
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r + 3 / view.k, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     if (n === selected || n === hovered) {
       ctx.strokeStyle = css('--accent');
       ctx.lineWidth = 2.5 / view.k;
@@ -562,6 +579,7 @@ async function open(n) {
   if (n.description) fields.push(['Description', esc(n.description)]);
   if (n.resource) fields.push(['Resource', '<a href="' + esc(n.resource) + '" target="_blank" rel="noopener">' + esc(n.resource) + '</a>']);
   if (n.tags.length) fields.push(['Tags', n.tags.map((t) => '<span class="tag">' + esc(t) + '</span>').join('')]);
+  if (n.dangling) fields.push(['Dangling links', '<span style="color:var(--warn)">' + n.dangling + ' dead ' + (n.dangling === 1 ? 'link' : 'links') + ' — shown dotted below</span>']);
   if (fields.length) {
     html += '<dl class="fields">' + fields.map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>';
   }
