@@ -1046,6 +1046,39 @@ ai-mem-lint() {
         fi
     fi
 
+
+    # Dangling wikilinks: a [[target]] pointing at a note that does not exist --
+    # a dead edge in the graph. Detection only: the dead link is surfaced, never
+    # auto-removed, because the intended target is unknowable and a note's own
+    # prose is the author's to edit. Wikilinks resolve by basename (the same way
+    # ai-mem-serve draws them), so the node set is every note's basename.
+    #
+    # One grep over the vault, never a grep per file -- a per-file scan is the
+    # 25s antipattern ai-mem-search documents. Scope is the vault root derived
+    # from AI_MEM_SESSION_DIR (its parent), the same subtree the rest of this
+    # linter walks, so a caller that redirects the session dir redirects this too.
+    local vault="${AI_MEM_SESSION_DIR:h}"
+    typeset -A _known
+    local nf
+    for nf in ${(f)"$(find "$vault" -name '*.md' -not -path '*/.git/*' 2>/dev/null)"}; do
+        _known[${nf:t:r}]=1
+    done
+    local -a dangling
+    local line src tgt
+    for line in ${(f)"$(grep -rHoE --include='*.md' --exclude-dir=.git -- '\[\[[^]]+\]\]' "$vault" 2>/dev/null)"}; do
+        src="${line%%:\[\[*}"          # path, before the ':[[' grep separator
+        tgt="${line##*:\[\[}"; tgt="${tgt%\]\]}"   # inside the brackets
+        tgt="${tgt%%\|*}"; tgt="${tgt%%#*}"        # drop |alias and #heading
+        tgt="${tgt## }"; tgt="${tgt%% }"
+        [[ -z "$tgt" ]] && continue
+        [[ -n "${_known[$tgt]-}" ]] && continue
+        dangling+=( "${src:t} -> [[${tgt}]]" )
+    done
+    if (( $#dangling )); then
+        print -r -- "$#dangling dangling wikilink(s) -- a [[link]] that resolves to no note:"
+        for line in $dangling; do print -r -- "  $line"; done
+        (( issues += $#dangling ))
+    fi
     if (( issues == 0 )); then
         print -r -- "ok: vault links are clean"
     else
@@ -1156,6 +1189,108 @@ ai-mem-sleep() {
     print -r -- "--"
     print -r -- "lint:"
     ai-mem-lint
+}
+
+# ai-mem-sleep-schedule: run the bedtime pass on its own, nightly. A scheduled
+# shell does not source ~/.zshrc, so the job sources the module directly
+# ($AI_MEM_HOME/ai-mem.zsh) before calling ai-mem-sleep --apply. macOS uses a
+# launchd LaunchAgent; every other platform uses crontab.
+#
+#   ai-mem-sleep-schedule                        print what it would install
+#   ai-mem-sleep-schedule --install [--at HH:MM]  install it (default 03:00)
+#   ai-mem-sleep-schedule --uninstall             remove it
+#
+# Dry run by default -- nothing is scheduled until --install. AI_MEM_LAUNCHAGENTS
+# overrides where the plist is written (used by the tests).
+ai-mem-sleep-schedule() {
+    local action="print" at="03:00"
+    while (( $# )); do
+        case "$1" in
+            --install)   action="install" ;;
+            --uninstall) action="uninstall" ;;
+            --at)        at="${2:-}"; shift ;;
+            *) print -r -- "usage: ai-mem-sleep-schedule [--install|--uninstall] [--at HH:MM]"; return 2 ;;
+        esac
+        shift
+    done
+    if [[ ! "$at" =~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' ]]; then
+        print -r -- "ai-mem-sleep-schedule: --at wants HH:MM (24-hour), got '$at'"
+        return 2
+    fi
+    local hh="${at%%:*}" mm="${at##*:}"
+    local module="$AI_MEM_HOME/ai-mem.zsh"
+    local cmd="source ${(q)module}; ai-mem-sleep --apply"
+    local label="app.ai-mem.sleep"
+    local log="${AI_MEM_ROOT:h}/ai-mem-sleep.log"
+
+    if [[ "$OSTYPE" == darwin* ]]; then
+        local plist="${AI_MEM_LAUNCHAGENTS:-$HOME/Library/LaunchAgents}/${label}.plist"
+        local body='<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>'"$label"'</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/zsh</string><string>-c</string><string>'"$cmd"'</string></array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>'"${hh#0}"'</integer><key>Minute</key><integer>'"${mm#0}"'</integer></dict>
+  <key>StandardOutPath</key><string>'"$log"'</string>
+  <key>StandardErrorPath</key><string>'"$log"'</string>
+</dict></plist>'
+        case "$action" in
+            print)
+                print -r -- "would install a launchd agent (daily at $at):"
+                print -r -- "  $plist"
+                print -r -- "$body"
+                print -r -- "--"
+                print -r -- "install with: ai-mem-sleep-schedule --install --at $at" ;;
+            install)
+                mkdir -p "${plist:h}"
+                print -r -- "$body" > "$plist" || { print -r -- "could not write $plist"; return 1 }
+                if [[ -z "${AI_MEM_SLEEP_NO_LAUNCHCTL-}" ]] && command -v launchctl >/dev/null 2>&1; then
+                    launchctl unload "$plist" 2>/dev/null
+                    if launchctl load "$plist" 2>/dev/null; then
+                        print -r -- "scheduled: $label runs daily at $at"
+                    else
+                        print -r -- "wrote $plist, but launchctl load failed -- it will load at next login"
+                    fi
+                else
+                    print -r -- "wrote $plist (launchctl not found; loads at next login)"
+                fi ;;
+            uninstall)
+                [[ -z "${AI_MEM_SLEEP_NO_LAUNCHCTL-}" ]] && command -v launchctl >/dev/null 2>&1 && launchctl unload "$plist" 2>/dev/null
+                if [[ -f "$plist" ]]; then
+                    rm -f "$plist" && print -r -- "removed $label"
+                else
+                    print -r -- "no schedule at $plist"
+                fi ;;
+        esac
+        return 0
+    fi
+
+    # Linux and other: crontab. The comment marker lets --uninstall find its own
+    # line without disturbing anything else the user has scheduled.
+    local cronline="${mm#0} ${hh#0} * * * /bin/zsh -c '${cmd}' >> ${log} 2>&1  # ${label}"
+    case "$action" in
+        print)
+            print -r -- "would add this crontab line (daily at $at):"
+            print -r -- "  $cronline"
+            print -r -- "--"
+            print -r -- "install with: ai-mem-sleep-schedule --install --at $at" ;;
+        install)
+            if ! command -v crontab >/dev/null 2>&1; then
+                print -r -- "crontab not found -- add this to your scheduler yourself:"
+                print -r -- "  $cronline"
+                return 1
+            fi
+            if { crontab -l 2>/dev/null | grep -v "# ${label}\$"; print -r -- "$cronline"; } | crontab -; then
+                print -r -- "scheduled: crontab entry $label runs daily at $at"
+            else
+                print -r -- "crontab update failed"; return 1
+            fi ;;
+        uninstall)
+            if ! command -v crontab >/dev/null 2>&1; then print -r -- "crontab not found"; return 1; fi
+            crontab -l 2>/dev/null | grep -v "# ${label}\$" | crontab - && print -r -- "removed $label from crontab" ;;
+    esac
 }
 # Full-text search across the vault. Plain grep -- no new dependency, and at
 # vault scale (a personal notes collection, not a codebase) there is no real
