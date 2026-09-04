@@ -529,6 +529,37 @@ has "$LINTOUT2" "unreferenced project note" "ai-mem-lint catches an unreferenced
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
 
+# --- 13b. ai-mem-sleep decays old session logs, and never a lesson -----------
+_SLEEP_OLD_ROOT="$AI_MEM_ROOT"; _SLEEP_OLD_SESS="$AI_MEM_SESSION_DIR"
+SLEEPVAULT="$(mktemp -d)/_Ai_Memory"
+export AI_MEM_ROOT="$SLEEPVAULT"
+export AI_MEM_SESSION_DIR="$SLEEPVAULT/_session_logs"
+mkdir -p "$AI_MEM_SESSION_DIR/sleepproj" "$SLEEPVAULT/_lessons"
+for d in 2026-09-01 2026-09-02 2026-09-03 2026-09-04 2026-09-05; do
+  echo "recent SLEEPNEEDLE" > "$AI_MEM_SESSION_DIR/sleepproj/sleepproj-${d}_10-00-00.md"
+done
+for d in 2020-01-01 2020-02-02; do
+  echo "ancient SLEEPNEEDLE" > "$AI_MEM_SESSION_DIR/sleepproj/sleepproj-${d}_10-00-00.md"
+done
+echo "durable SLEEPNEEDLE" > "$SLEEPVAULT/_lessons/sleep-keep.md"
+
+SLEEP_DRY="$(AI_MEM_SLEEP_KEEP=5 ai-mem-sleep 2>/dev/null)"
+has "$SLEEP_DRY" "2 log(s) to archive"  "ai-mem-sleep dry run reports the archivable logs"
+has "$SLEEP_DRY" "Re-run with --apply"  "ai-mem-sleep dry run moves nothing"
+is "$(find "$AI_MEM_SESSION_DIR/sleepproj" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "7" \
+  "ai-mem-sleep dry run leaves every log in place"
+
+AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
+is "$(find "$AI_MEM_SESSION_DIR/sleepproj" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "5" \
+  "ai-mem-sleep --apply keeps the newest five logs hot"
+is "$(find "$AI_MEM_SESSION_DIR/sleepproj/_archive" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')" "2" \
+  "ai-mem-sleep --apply archives the two ancient logs, not deletes them"
+exists "$SLEEPVAULT/_lessons/sleep-keep.md" "ai-mem-sleep never touches a lesson"
+SLEEP_SEARCH="$(ai-mem-search SLEEPNEEDLE 2>/dev/null)"
+hasnt "$SLEEP_SEARCH" "ancient SLEEPNEEDLE" "ai-mem-search skips archived session logs"
+has   "$SLEEP_SEARCH" "durable SLEEPNEEDLE" "the lesson stays in the hot search path"
+
+export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 # --- 14. ai-mem-search finds text across the vault -----------------------------
 SEARCHVAULT="$(mktemp -d)"
 mkdir -p "$SEARCHVAULT/_session_logs/searchproj1" "$SEARCHVAULT/_session_logs/searchproj2"

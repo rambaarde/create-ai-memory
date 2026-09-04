@@ -254,7 +254,7 @@ implementations rather than guessing.
 | Runtime dependencies | **0** |
 | Package | **35 kB** (99.7 kB unpacked, 19 files) |
 | Index, daemon, database, embeddings | **none** — a note is searchable the moment it is written |
-| Tests | **273**, no network, no framework |
+| Tests | **281**, no network, no framework |
 
 ```sh
 npm pack --dry-run && zsh tests/run.sh
@@ -303,7 +303,8 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, and notes missing the `type:` field. `--fix` backfills `type:` into session logs written before the field existed |
-| `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs), newest match first. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 25) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
+| `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs). Lessons rank first, and within them by *reinforcement* -- a lesson recalled more often (more dated entries) ranks above a once-seen one -- then by date; archived logs (see `ai-mem-sleep`) are skipped. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 25) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
+| `ai-mem-sleep [--apply]` | The vault's "bedtime" pass: archive stale session logs, flag consolidation candidates, and lint, in one run. Session logs older than `AI_MEM_SLEEP_DAYS` (default 90) move out of the hot search path -- always keeping the newest `AI_MEM_SLEEP_KEEP` (default 5) per project -- while `_lessons/` are never touched, because durable failure->fix knowledge is exactly what must survive. Dry-run by default; `--apply` moves logs into each project's `_archive/` (reversible via git) and backs up |
 | `ai-mem-serve [port] [--no-open]` | Open the vault as a browsable graph on `127.0.0.1`. Agents run this for you when you ask to see your memory (see [Graph view](#graph-view)) |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
 
@@ -835,7 +836,7 @@ generation, adapter dispatch, the commit token, `ai-note`, and the cursor rule
 file.
 
 ```sh
-zsh tests/run.sh     # offline unit tests (273 assertions)
+zsh tests/run.sh     # offline unit tests (281 assertions)
 zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ```
 
