@@ -1054,6 +1054,109 @@ ai-mem-lint() {
     return $(( issues > 0 ? 1 : 0 ))
 }
 
+
+# ai-mem-sleep: the vault's "bedtime" pass -- consolidation, decay and lint in
+# one run, modelled on how a brain sleeps. It NEVER prunes a lesson: the
+# failure->fix records in _lessons/ are the durable knowledge that must survive,
+# and reinforcement already strengthens them. Only ephemeral SESSION LOGS decay,
+# and even they are ARCHIVED (moved under the project's _archive/, which
+# ai-mem-search skips), never deleted -- git keeps every move reversible.
+#
+# Dry run by default: it reports what would move and nothing changes on disk.
+# --apply performs the archive moves and backs the vault up. Tunables:
+#   AI_MEM_SLEEP_KEEP        newest logs per project always kept hot (default 5)
+#   AI_MEM_SLEEP_DAYS        archive logs older than this many days   (default 90)
+#   AI_MEM_SLEEP_CONSOLIDATE flag a project with this many hot logs   (default 8)
+ai-mem-sleep() {
+    local apply=0
+    [[ "${1:-}" == "--apply" ]] && apply=1
+
+    zmodload zsh/datetime 2>/dev/null
+    local keep="${AI_MEM_SLEEP_KEEP:-5}"
+    local days="${AI_MEM_SLEEP_DAYS:-90}"
+    local ripe="${AI_MEM_SLEEP_CONSOLIDATE:-8}"
+    # Cut-off date as a string. Filenames carry YYYY-MM-DD, which sorts and
+    # compares chronologically as text, so no BSD-vs-GNU `date` parsing is
+    # needed -- strftime on an epoch offset is portable and dependency-free.
+    local cutoff
+    cutoff="$(strftime '%Y-%m-%d' $(( EPOCHSECONDS - days * 86400 )))"
+
+    if (( apply )); then
+        print -r -- "ai-mem-sleep: applying. Keep newest $keep per project; archive session logs dated before $cutoff."
+    else
+        print -r -- "ai-mem-sleep: dry run (nothing moves). Keep newest $keep per project; would archive logs dated before $cutoff."
+    fi
+    print -r -- "Lessons are never touched -- only ephemeral session logs, and they are archived, not deleted."
+    print -r -- "--"
+
+    local sessions_root="$AI_MEM_SESSION_DIR"
+    if [[ ! -d "$sessions_root" ]]; then
+        print -r -- "no session logs at $sessions_root -- nothing to do"
+        return 0
+    fi
+
+    local -i total_archived=0
+    local project pdir log sidecar stem logdate
+    local -a logs stale
+    local -i i hot remaining
+    for pdir in "$sessions_root"/*(/N); do
+        project="${pdir:t}"
+        # Skip the archive dir itself and any bookkeeping dir (leading _ or .).
+        [[ "$project" == [_.]* ]] && continue
+
+        # Newest first: a log's name starts with the project slug, so name order
+        # is date order within one project. (On) sorts by name, descending.
+        logs=( "$pdir"/*.md(N.On) )
+        (( ${#logs} )) || continue
+
+        # The newest KEEP stay hot however old they are, so a dormant project
+        # keeps a readable recent history instead of emptying out.
+        hot=$(( keep < ${#logs} ? keep : ${#logs} ))
+        stale=()
+        for (( i = hot + 1; i <= ${#logs}; i++ )); do
+            log="${logs[i]}"
+            stem="${${log:t:r}%%_*}"      # "proj-2026-08-20_10-00-00.md" -> "proj-2026-08-20"
+            logdate="${stem: -10}"          # -> "2026-08-20"
+            [[ "$logdate" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' ]] || continue   # not a dated log
+            [[ "$logdate" < "$cutoff" ]] || continue                          # not old enough
+            stale+=( "$log" )
+        done
+        remaining=$(( ${#logs} - ${#stale} ))
+
+        if (( ${#stale} )); then
+            print -r -- "$project: ${#stale} log(s) to archive (of ${#logs}, keeping newest $hot)"
+            if (( apply )); then
+                mkdir -p "$pdir/_archive"
+                for log in "${stale[@]}"; do
+                    mv -- "$log" "$pdir/_archive/"
+                    sidecar="${log:r}.startsha"
+                    [[ -f "$sidecar" ]] && mv -- "$sidecar" "$pdir/_archive/"
+                done
+            fi
+            (( total_archived += ${#stale} ))
+        fi
+
+        # Consolidation candidate: many still-hot logs are unconsolidated
+        # knowledge -- a nudge to distil them into a durable lesson.
+        if (( remaining >= ripe )); then
+            print -r -- "$project: $remaining hot logs -- consolidation candidate (distil into a _lessons/ note)"
+        fi
+    done
+
+    print -r -- "--"
+    if (( apply && total_archived > 0 )); then
+        __ai_mem_vault_backup
+        print -r -- "Archived $total_archived session log(s) -- reversible: in each project's _archive/ and in git history."
+    elif (( total_archived > 0 )); then
+        print -r -- "Would archive $total_archived session log(s). Re-run with --apply to move them."
+    else
+        print -r -- "No session logs old enough to archive."
+    fi
+
+    print -r -- "--"
+    print -r -- "lint:"
+    ai-mem-lint
+}
 # Full-text search across the vault. Plain grep -- no new dependency, and at
 # vault scale (a personal notes collection, not a codebase) there is no real
 # performance reason to reach for anything faster. Always resolves one hop
@@ -1087,7 +1190,10 @@ ai-mem-search() {
     # -F: the caller is usually an agent passing a free-text term, where a
     # stray . ( | must match literally rather than as a regex metacharacter.
     local raw
-    raw="$(grep -rniF --exclude-dir=.git --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
+    # --exclude-dir=_archive: session logs that ai-mem-sleep has retired are out
+    # of the hot search path (their durable content lives on in a lesson). They
+    # stay in git and on disk, just not in a default search.
+    raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
 
     if [[ -z "$raw" ]]; then
         print -r -- "no matches for '$term' in $search_root"
