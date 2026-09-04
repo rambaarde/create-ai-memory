@@ -610,6 +610,41 @@ is "$(find "$AI_MEM_SESSION_DIR/aged" -maxdepth 1 -name '*.md' | wc -l | tr -d '
   "a second ai-mem-sleep --apply is idempotent"
 
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
+
+# --- 13d. ai-mem-lint flags dangling wikilinks (dead graph edges) ------------
+_LINK_ROOT="$(mktemp -d)/_Ai_Memory"
+export AI_MEM_ROOT="$_LINK_ROOT"
+export AI_MEM_SESSION_DIR="$_LINK_ROOT/_session_logs"
+export AI_MEM_PROJECT_DIR="$_LINK_ROOT/_projects"
+mkdir -p "$AI_MEM_PROJECT_DIR" "$_LINK_ROOT/_lessons"
+echo "# proj" > "$AI_MEM_PROJECT_DIR/proj.md"
+printf '# lesson\n\nSee [[proj]], [[proj|an alias]], and [[ghost-note]].\n' > "$_LINK_ROOT/_lessons/x.md"
+LINK_OUT="$(ai-mem-lint 2>/dev/null)"
+has   "$LINK_OUT" "dangling wikilink"       "ai-mem-lint reports a dangling wikilink"
+has   "$LINK_OUT" "[[ghost-note]]"          "ai-mem-lint names the dead link's target"
+hasnt "$LINK_OUT" "[[proj]]"                "a wikilink that resolves is not flagged"
+hasnt "$LINK_OUT" "[[an alias]]"            "an aliased wikilink resolves on its target, not its alias"
+export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
+export AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
+
+# --- 13e. ai-mem-sleep-schedule generates and installs a nightly run ---------
+SCHED_DRY="$(AI_MEM_ROOT="$_LINK_ROOT" ai-mem-sleep-schedule --at 02:30 2>/dev/null)"
+has "$SCHED_DRY" "ai-mem-sleep --apply" "the schedule runs the bedtime pass"
+has "$SCHED_DRY" "ai-mem.zsh"          "the schedule sources the module (a cron/launchd shell would not)"
+has "$SCHED_DRY" "install with"        "the dry run tells you how to install it"
+SCHED_BAD="$(ai-mem-sleep-schedule --at 99:99 2>&1)"; SCHED_BAD_EXIT=$?
+is  "$SCHED_BAD_EXIT" "2"              "an invalid --at time is rejected"
+has "$SCHED_BAD" "HH:MM"              "the rejection names the expected format"
+# Install to a throwaway target, without touching the real launchd/crontab.
+if [[ "$OSTYPE" == darwin* ]]; then
+  SCHED_AGENTS="$(mktemp -d)"
+  AI_MEM_SLEEP_NO_LAUNCHCTL=1 AI_MEM_LAUNCHAGENTS="$SCHED_AGENTS" AI_MEM_ROOT="$_LINK_ROOT" \
+    ai-mem-sleep-schedule --install --at 04:15 >/dev/null 2>&1
+  exists "$SCHED_AGENTS/app.ai-mem.sleep.plist" "--install writes the launchd plist"
+  has "$(<"$SCHED_AGENTS/app.ai-mem.sleep.plist")" "ai-mem-sleep --apply" "the installed plist runs the bedtime pass"
+  AI_MEM_SLEEP_NO_LAUNCHCTL=1 AI_MEM_LAUNCHAGENTS="$SCHED_AGENTS" ai-mem-sleep-schedule --uninstall >/dev/null 2>&1
+  is "$(find "$SCHED_AGENTS" -name '*.plist' | wc -l | tr -d ' ')" "0" "--uninstall removes the plist"
+fi
 # --- 14. ai-mem-search finds text across the vault -----------------------------
 SEARCHVAULT="$(mktemp -d)"
 mkdir -p "$SEARCHVAULT/_session_logs/searchproj1" "$SEARCHVAULT/_session_logs/searchproj2"
