@@ -919,7 +919,16 @@ ai-lesson() {
     printf -- '\n## %s [[%s]]\n\n### Problem\n%s\n\n### Solution\n%s\n' \
         "$timestamp" "$project_name" "$problem" "$solution" >> "$lesson_file"
     __ai_mem_vault_backup
-    printf 'Appended to %s\n' "$lesson_file"
+    # Make the reinforcement visible: a second-or-later entry is the same
+    # lesson firing again, which ai-mem-search now ranks higher. Derived from
+    # the entries themselves, so nothing is stored twice.
+    local recalls
+    recalls="$(grep -c '^## [0-9]' "$lesson_file" 2>/dev/null)"
+    if (( recalls > 1 )); then
+        printf 'Reinforced %s -- %d recalls now, so it ranks higher in ai-mem-search\n' "$lesson_file" "$recalls"
+    else
+        printf 'Appended to %s\n' "$lesson_file"
+    fi
 }
 # Lints the vault's links: session logs missing a project wikilink, previous
 # links pointing at a note that no longer exists, and project notes nothing
@@ -1104,19 +1113,44 @@ ai-mem-search() {
     # THREE lessons that answer it exactly. The durable answer was in the
     # vault and unreachable.
     #
-    # Sort key is rank + timestamp: "0" for _lessons/, "1" for everything
-    # else, so a lesson with an old date still beats today's chatter.
+    # Sort key is rank + reinforcement + timestamp. "1" for _lessons/, "0"
+    # for everything else, so a lesson with an old date still beats today's
+    # chatter. Within the lessons tier, a lesson RECALLED more often ranks
+    # above a once-seen one -- long-term potentiation for the vault: a pathway
+    # that keeps firing is strengthened. Timestamp breaks ties below that.
+    #
+    # Reinforcement is the count of dated entries the lesson already carries.
+    # ai-lesson appends one every time the same problem is hit again, so the
+    # count is already in the data -- no separate counter to keep in sync (a
+    # shadowed derived field is its own class of bug), and it is read in ONE
+    # grep over the lesson headers, never a per-file scan. Only whole-vault
+    # searches consult it; a project-scoped search sees no lessons anyway.
+    local strengths=""
+    [[ -z "$project" ]] && strengths="$(grep -rc '^## [0-9]' "$AI_MEM_ROOT/_lessons" 2>/dev/null)"
+
     local sorted
-    sorted="$(print -r -- "$raw" | awk -v root="$search_root/" '
+    sorted="$(awk -v root="$search_root/" '
+        # First input: <lesson-file-path>:<entry-count>. Build the strength map.
+        FNR == NR {
+            if (match($0, /:[0-9]+$/)) {
+                str[substr($0, 1, RSTART - 1)] = substr($0, RSTART + 1) + 0
+            }
+            next
+        }
         {
             ts = "0000-00-00_00-00-00"
             if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
                 ts = substr($0, RSTART, RLENGTH)
             rel = $0
             sub(root, "", rel)
-            rank = (rel ~ /^_lessons\//) ? "1" : "0"
-            print rank "|" ts "|" $0
-        }' | sort -r | cut -d'|' -f3-)"
+            is_lesson = (rel ~ /^_lessons\//)
+            rank = is_lesson ? "1" : "0"
+            # The file this match came from, to look up its reinforcement count.
+            path = $0
+            sub(/:[0-9]+:.*$/, "", path)
+            strength = is_lesson ? sprintf("%03d", str[path] + 0) : "000"
+            print rank "|" strength "|" ts "|" $0
+        }' <(print -r -- "$strengths") <(print -r -- "$raw") | sort -r | cut -d'|' -f4-)"
 
     # Bound the output. The consumer is normally an agent with a finite
     # context window, and an unbounded dump is actively harmful there in a
