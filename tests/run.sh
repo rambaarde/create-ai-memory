@@ -1075,8 +1075,11 @@ BLANK_PROMPT="$(AI_MEM_ROOT="$BLANKVAULT" zsh -c '
 has "$BLANK_PROMPT" "NOT YET FILLED IN" "an unfilled project note is flagged, not passed off as context"
 has "$BLANK_PROMPT" "fill it in early"  "the prompt says what to do about it"
 
-# And once it holds real content it must say nothing at all.
-sed -i '' 's|\[What problem this repository solves\]|Ships widgets.|' \
+# And once it holds real content it must say nothing at all. perl -i, not
+# `sed -i ''`: the empty-suffix form is BSD-only, and on GNU sed it misparses
+# so the placeholder is never replaced -- which failed this assertion on Linux
+# while passing on macOS. perl -i behaves the same on both.
+perl -i -pe 's/\Q[What problem this repository solves]\E/Ships widgets./' \
   "$BLANKVAULT/_projects/$(basename "$WORK").md" 2>/dev/null || true
 FILLED_PROMPT="$(AI_MEM_ROOT="$BLANKVAULT" zsh -c '
   source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
