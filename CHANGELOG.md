@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.15.0](https://github.com/rambaarde/create-ai-memory/compare/v0.14.7...v0.15.0) (2026-09-05)
+
+
+### Features
+
+* launch Antigravity (agy) with vault context ([d0abf81](https://github.com/rambaarde/create-ai-memory/commit/d0abf811f8d881f8eb9aa3435c011ad50759c825))
+* launch Antigravity (agy) with vault context ([e87ea72](https://github.com/rambaarde/create-ai-memory/commit/e87ea722a2e52a38bf8bf0b1f9ff275ae66b8da1))
+* **search:** rank a lesson by how often it was recalled, not only its date ([155013f](https://github.com/rambaarde/create-ai-memory/commit/155013ff0872536f692d503e6d8c3e282ea91457))
+* **search:** rank lessons by reinforcement, not only date ([f176a37](https://github.com/rambaarde/create-ai-memory/commit/f176a37da3c956fcb6c396c44aa6e13e3a64e381))
+* **search:** rank lessons by reinforcement; fix Linux test portability ([160c436](https://github.com/rambaarde/create-ai-memory/commit/160c436fdf0606fc3b01638a99cfb3769c3ea610))
+* **serve:** surface dangling wikilinks in the graph view ([5044c67](https://github.com/rambaarde/create-ai-memory/commit/5044c6762fbe04a7936204f31f57741f517dfc53))
+* **serve:** surface dangling wikilinks in the graph view ([1708bac](https://github.com/rambaarde/create-ai-memory/commit/1708bac79e07504dafee6a4d6352d4e4ca521766))
+* **serve:** surface dangling wikilinks in the graph view ([d5827e9](https://github.com/rambaarde/create-ai-memory/commit/d5827e92547c4882d19dbb18fbcb9beeaf56825a))
+* **sleep:** add ai-mem-sleep, the vault's bedtime maintenance pass ([ee6c10f](https://github.com/rambaarde/create-ai-memory/commit/ee6c10f7354340427b953bffb060c14b6df1d03f))
+* **sleep:** add ai-mem-sleep, the vault's bedtime maintenance pass ([84d8435](https://github.com/rambaarde/create-ai-memory/commit/84d8435601c3199c16d2b16783c1232ab358f339))
+* **sleep:** ai-mem-sleep bedtime maintenance pass ([cb57a62](https://github.com/rambaarde/create-ai-memory/commit/cb57a62d1a701e3df5de7265efe0093f735e4039))
+* **sleep:** schedule the bedtime pass, and lint dangling wikilinks ([815b922](https://github.com/rambaarde/create-ai-memory/commit/815b922f68f316e7c3b2f36d084ec5bd26397cb1))
+* **sleep:** schedule the bedtime pass, and lint dangling wikilinks ([b23bc63](https://github.com/rambaarde/create-ai-memory/commit/b23bc6353ba571d565e8da00a2eeb2f951c938a3))
+* **sleep:** scheduled bedtime pass + dangling-wikilink lint ([8ed8799](https://github.com/rambaarde/create-ai-memory/commit/8ed8799db46b3b2bd7cee591abadbe4868eed673))
+
+
+### Bug Fixes
+
+* bound what an inlined note contributes to the launch prompt ([39e477f](https://github.com/rambaarde/create-ai-memory/commit/39e477fcf2252d3b44ba5a0e1dd24f44815e704d))
+* bound what an inlined note contributes to the launch prompt ([be62bec](https://github.com/rambaarde/create-ai-memory/commit/be62bec8182978881eeb9ee109bf12d2eed8d9d4))
+* **test:** use perl -i so the filled-note assertion passes on Linux ([abb868f](https://github.com/rambaarde/create-ai-memory/commit/abb868fba42797b83426002ba64e6be29e9d2e29))
+* **test:** use perl -i so the filled-note assertion passes on Linux ([8cdbc8b](https://github.com/rambaarde/create-ai-memory/commit/8cdbc8b9c8986677c3dfa27d938d908528cde85b))
+
+
+### Performance Improvements
+
+* stop /ups spawning interactive subshells; export AI_MEM_HOME ([f714728](https://github.com/rambaarde/create-ai-memory/commit/f714728b805971831fa2fefc3bbc812b2f895a24))
+* stop /ups spawning interactive subshells; export AI_MEM_HOME ([b0a4b09](https://github.com/rambaarde/create-ai-memory/commit/b0a4b09fc6695ccfcaa6e71b51a61b8887995674))
+* stop /ups spawning interactive subshells; export AI_MEM_HOME ([4d22ef9](https://github.com/rambaarde/create-ai-memory/commit/4d22ef99c9dd8aa0bd6c3099b533989d77177e17))
+
 ## [0.14.7](https://github.com/rambaarde/create-ai-memory/compare/v0.14.6...v0.14.7) (2026-09-01)
 
 
