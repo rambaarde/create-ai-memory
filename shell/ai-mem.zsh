@@ -18,8 +18,11 @@
 # an agent then reports as success. Do not "tidy" these back to one
 # underscore -- tests/run.sh asserts the naming for exactly this reason.
 
-# Directory holding this module, used to source sibling files.
-AI_MEM_HOME="${0:A:h}"
+# Directory holding this module, used to source sibling files. Exported so a
+# non-interactive child shell can re-source the module by absolute path
+# (`zsh -c 'source "$AI_MEM_HOME/ai-mem.zsh"; ...'`) without a hard-coded path
+# and without the cost of a full interactive shell (`zsh -ic`).
+export AI_MEM_HOME="${0:A:h}"
 
 # Where the shipped example notes and templates live, used to auto-scaffold a
 # vault on first use so install.sh is optional (plugin-manager installs work).
