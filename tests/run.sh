@@ -63,6 +63,13 @@ cd "$WORK"
 succeeds '__ai_mem_guard "$AI_MEM_ROOT/_projects/x.md"' "guard allows a path inside the vault"
 fails    '__ai_mem_guard /etc/passwd'                    "guard rejects a path outside the vault"
 
+# --- 1b. module path is exported so a child shell can re-source it -------------
+# `/ups` and other agents re-source the module in a plain non-interactive
+# `zsh -c` (never `zsh -ic`) via "$AI_MEM_HOME/ai-mem.zsh"; that needs the var
+# to cross the process boundary.
+succeeds 'zsh -c "[[ -n \$AI_MEM_HOME ]]"'                "AI_MEM_HOME is exported to child shells"
+succeeds 'zsh -c "source \$AI_MEM_HOME/ai-mem.zsh; type ai-mem-sleep >/dev/null"' \
+                                                          "a child shell can re-source the module by \$AI_MEM_HOME"
 # --- 2. project resolution = git repo basename --------------------------------
 is "$(__ai_mem_resolve_project)" "demoproj" "project resolves to the git repo dir name"
 
