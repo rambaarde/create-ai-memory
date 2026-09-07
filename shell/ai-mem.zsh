@@ -933,6 +933,139 @@ ai-lesson() {
         printf 'Appended to %s\n' "$lesson_file"
     fi
 }
+
+# Ingests a distilled record of an external artifact (meeting, video, voice
+# note, ...) into the vault as ONE flat note per source_id under _transcripts/.
+# The heavy lifting -- transcription and distillation -- happens upstream
+# (fimbria); this only takes the already-distilled metadata as flags and files
+# it in reversible Markdown. Deliberately NOT a raw-transcript store: there is
+# no --text flag, the note LINKS to --transcript-path instead of embedding it
+# (distill, don't dump). Mirrors ai-lesson's one-file-per-slug create-or-update
+# shape so ai-mem-search covers it for free -- no new search path.
+#
+# Metadata arrives as flags, not JSON: parsing arbitrary JSON in pure zsh would
+# need jq, and a new external dependency is exactly what this project refuses.
+ai-mem-ingest() {
+    local source_id="" title="" date="" kind="" source_uri="" transcript_path=""
+    local project="" summary=""
+    local -a persons decisions actions
+    persons=(); decisions=(); actions=()
+
+    while (( $# )); do
+        case "$1" in
+            --source-id)       source_id="${2:-}"; shift 2 ;;
+            --title)           title="${2:-}"; shift 2 ;;
+            --date)            date="${2:-}"; shift 2 ;;
+            --kind)            kind="${2:-}"; shift 2 ;;
+            --source-uri)      source_uri="${2:-}"; shift 2 ;;
+            --transcript-path) transcript_path="${2:-}"; shift 2 ;;
+            --project)         project="${2:-}"; shift 2 ;;
+            --summary)         summary="${2:-}"; shift 2 ;;
+            --person)          persons+=("${2:-}"); shift 2 ;;
+            --decision)        decisions+=("${2:-}"); shift 2 ;;
+            --action)          actions+=("${2:-}"); shift 2 ;;
+            *) print -r -- "ai-mem-ingest: unknown flag: $1" >&2; return 1 ;;
+        esac
+    done
+
+    if [[ -z "$source_id" || -z "$title" || -z "$date" ]]; then
+        print -r -- "Usage: ai-mem-ingest --source-id <id> --title <t> --date <ISO> [--kind <meeting|video|voice-note|other>] [--source-uri <path/url>] [--transcript-path <path>] [--project <name>] [--person <name> ...] [--summary <text>] [--decision <text> ...] [--action <text> ...]" >&2
+        print -r -- "ai-mem-ingest: --source-id, --title, and --date are required" >&2
+        return 1
+    fi
+
+    # Dedup key: the filename is slug(source_id), slugified flat exactly like
+    # ai-lesson so a crafted source_id cannot path-traverse out of _transcripts/,
+    # and a re-ingest of the same source_id lands on the same file (update, not
+    # a duplicate).
+    local slug
+    slug="$(print -r -- "$source_id" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+    if [[ -z "$slug" ]]; then
+        print -r -- "ai-mem-ingest: --source-id must contain at least one letter or digit" >&2
+        return 1
+    fi
+
+    local transcript_file="$AI_MEM_ROOT/_transcripts/${slug}.md"
+    __ai_mem_guard "$transcript_file" || return 1
+
+    # Optional project wikilink: an explicit --project wins, else the pinned
+    # active session's project. Unlike ai-lesson this does NOT fall back to the
+    # cwd basename -- an ingested artifact may belong to no project at all.
+    local project_name="$project"
+    [[ -z "$project_name" && -n "${AI_MEM_ACTIVE_PROJECT:-}" ]] && project_name="$AI_MEM_ACTIVE_PROJECT"
+
+    mkdir -p "$AI_MEM_ROOT/_transcripts"
+
+    # Build the whole note in a temp file and mv it into place, so a re-ingest
+    # OVERWRITES (updates) the one file rather than appending a second copy.
+    local tmp
+    tmp="$(mktemp)"
+    {
+        print -r -- "---"
+        print -r -- "type: ai-transcript"
+        print -r -- "date: $date"
+        print -r -- "title: $title"
+        [[ -n "$kind" ]]       && print -r -- "kind: $kind"
+        print -r -- "source_uri: $source_uri"
+        print -r -- "source_id: $source_id"
+        [[ -n "$project_name" ]] && print -r -- "project: \"[[$project_name]]\""
+        print -r -- "---"
+        print -r -- ""
+        print -r -- "# $title"
+
+        if (( ${#persons} )); then
+            local -a plinks; plinks=()
+            local p
+            for p in "${persons[@]}"; do plinks+=("[[$p]]"); done
+            print -r -- ""
+            print -r -- "Attendees: ${(j: :)plinks}"
+        fi
+
+        if [[ -n "$summary" ]]; then
+            print -r -- ""
+            print -r -- "## Summary"
+            print -r -- ""
+            print -r -- "$summary"
+        fi
+
+        print -r -- ""
+        print -r -- "## Decisions"
+        print -r -- ""
+        if (( ${#decisions} )); then
+            local d
+            for d in "${decisions[@]}"; do print -r -- "- $d"; done
+        fi
+
+        print -r -- ""
+        print -r -- "## Action items"
+        print -r -- ""
+        if (( ${#actions} )); then
+            local a
+            for a in "${actions[@]}"; do print -r -- "- $a"; done
+        fi
+
+        # Distill, don't dump: only a relative link to the source transcript,
+        # never its body. There is no flag that could carry the body.
+        if [[ -n "$transcript_path" ]]; then
+            print -r -- ""
+            print -r -- "## Source"
+            print -r -- ""
+            print -r -- "- Transcript: [$transcript_path]($transcript_path)"
+        fi
+    } > "$tmp"
+
+    local existed=0
+    [[ -f "$transcript_file" ]] && existed=1
+    mv "$tmp" "$transcript_file"
+
+    __ai_mem_vault_backup
+
+    if (( existed )); then
+        printf 'Updated %s\n' "$transcript_file"
+    else
+        printf 'Ingested %s\n' "$transcript_file"
+    fi
+}
 # Lints the vault's links: session logs missing a project wikilink, previous
 # links pointing at a note that no longer exists, and project notes nothing
 # links back to. Pure grep/find -- no new dependency, catches exactly the
