@@ -1533,6 +1533,92 @@ else
 fi
 kill $FOREIGN_PID 2>/dev/null
 
+
+# --- 12. ai-mem-ingest files one distilled note per source_id ----------------
+# CM-1: ingest a distilled record of an external artifact (meeting/video/voice)
+# as ONE flat _transcripts/<slug(source_id)>.md. Mirrors ai-lesson's
+# one-file-per-slug create-or-update shape: pure zsh, no jq, no raw transcript
+# stored -- the note only LINKS to the source. A dedicated throwaway vault so
+# this never perturbs demoproj's chain that earlier sections rely on.
+ING_SAVE_ROOT="$AI_MEM_ROOT"
+export AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$AI_MEM_ROOT"
+export AI_MEM_ROOT="$(cd "$AI_MEM_ROOT" && pwd -P)"
+
+# (f) required flags
+fails 'ai-mem-ingest --title "no id" --date "2026-09-07"'      "ai-mem-ingest fails without --source-id"
+fails 'ai-mem-ingest --source-id id1 --date "2026-09-07"'      "ai-mem-ingest fails without --title"
+fails 'ai-mem-ingest --source-id id1 --title "T"'              "ai-mem-ingest fails without --date"
+fails 'ai-mem-ingest --source-id id1 --title T --date D --text "raw transcript body"' \
+  "ai-mem-ingest rejects --text: there is no raw-transcript input (distill, don't dump)"
+
+# (a) create one note with frontmatter + decisions/actions/person wikilinks
+succeeds 'ai-mem-ingest --source-id "MTG-2026-09-07" --title "Q3 Planning" --date "2026-09-07" \
+  --kind meeting --source-uri "https://ex/rec/1" --transcript-path "../_raw/q3.txt" \
+  --project demoproj --person "Ada Lovelace" --person Bob --summary "Agreed the roadmap." \
+  --decision "Ship v2 in October" --action "Ada drafts the PRD"' \
+  "ai-mem-ingest accepts distilled metadata as flags"
+ING_FILE="$AI_MEM_ROOT/_transcripts/mtg-2026-09-07.md"
+exists "$ING_FILE" "ai-mem-ingest creates _transcripts/<slug(source_id)>.md"
+ING_BODY="$(<"$ING_FILE")"
+has "$ING_BODY" "type: ai-transcript"          "ingest note declares a house-consistent type"
+has "$ING_BODY" "source_id: MTG-2026-09-07"    "ingest persists source_id as the dedup key in frontmatter"
+has "$ING_BODY" "date: 2026-09-07"             "ingest writes the date frontmatter"
+has "$ING_BODY" "title: Q3 Planning"           "ingest writes the title frontmatter"
+has "$ING_BODY" "source_uri: https://ex/rec/1" "ingest writes the source_uri frontmatter"
+has "$ING_BODY" 'project: "[[demoproj]]"'      "ingest tags the note with a project wikilink when --project is given"
+has "$ING_BODY" "## Summary"                   "ingest writes a Summary section when --summary is given"
+has "$ING_BODY" "Agreed the roadmap."          "ingest includes the distilled summary text"
+has "$ING_BODY" "## Decisions"                 "ingest writes a Decisions section"
+has "$ING_BODY" "- Ship v2 in October"         "ingest lists each --decision"
+has "$ING_BODY" "## Action items"              "ingest writes an Action items section"
+has "$ING_BODY" "- Ada drafts the PRD"         "ingest lists each --action"
+has "$ING_BODY" "[[Ada Lovelace]]"             "ingest links each --person as a wikilink"
+has "$ING_BODY" "[[Bob]]"                       "ingest links a second --person as a wikilink"
+
+# (d) distill-don't-dump: the transcript LINK is present, the body is NOT
+has  "$ING_BODY" "(../_raw/q3.txt)"            "ingest links to the source transcript path"
+hasnt "$ING_BODY" "raw transcript body"        "ingest never embeds a raw transcript body"
+
+# no --project + no active project => no project wikilink. Earlier sections
+# export AI_MEM_ACTIVE_PROJECT; clear it so this exercises the "neither set" case.
+ING_SAVE_PROJECT="${AI_MEM_ACTIVE_PROJECT:-}"
+unset AI_MEM_ACTIVE_PROJECT
+succeeds 'ai-mem-ingest --source-id "SOLO-1" --title "Solo" --date "2026-09-07"' \
+  "ai-mem-ingest works with only the three required flags"
+hasnt "$(<"$AI_MEM_ROOT/_transcripts/solo-1.md")" "project:" \
+  "ingest omits the project wikilink when neither --project nor \$AI_MEM_ACTIVE_PROJECT is set"
+[[ -n "$ING_SAVE_PROJECT" ]] && export AI_MEM_ACTIVE_PROJECT="$ING_SAVE_PROJECT"
+
+# (b) re-ingest the same source_id (case-folded) UPDATES the one file, no dupe
+ING_COUNT_BEFORE="$(find "$AI_MEM_ROOT/_transcripts" -type f -name '*.md' | wc -l | tr -d ' ')"
+ai-mem-ingest --source-id "mtg-2026-09-07" --title "Q3 Planning (revised)" --date "2026-09-08" \
+  --decision "Freeze scope on the 8th" >/dev/null
+is "$(find "$AI_MEM_ROOT/_transcripts" -type f -name '*.md' | wc -l | tr -d ' ')" "$ING_COUNT_BEFORE" \
+  "re-ingesting the same source_id updates the one file instead of creating a second"
+ING_BODY2="$(<"$ING_FILE")"
+has "$ING_BODY2" "title: Q3 Planning (revised)" "re-ingest overwrites the note content"
+has "$ING_BODY2" "- Freeze scope on the 8th"    "re-ingest reflects the new decisions"
+hasnt "$ING_BODY2" "Ship v2 in October"         "re-ingest replaces the note, it does not append a second copy"
+
+# (c) a different source_id makes a second file
+ai-mem-ingest --source-id "VID-42" --title "Design walkthrough" --date "2026-09-07" --kind video >/dev/null
+is "$(find "$AI_MEM_ROOT/_transcripts" -type f -name '*.md' | wc -l | tr -d ' ')" \
+   "$(( ING_COUNT_BEFORE + 1 ))" "a different source_id creates a distinct _transcripts file"
+exists "$AI_MEM_ROOT/_transcripts/vid-42.md" "the second source_id slugifies to its own flat file"
+
+# (e) the write path is gated by __ai_mem_guard, and a crafted source_id is
+# slugified flat -- it cannot path-traverse out of _transcripts/.
+fails    '__ai_mem_guard /etc/evil.md' "the guard ai-mem-ingest reuses refuses a path outside the vault"
+ai-mem-ingest --source-id "../../etc/evil" --title "t" --date "d" >/dev/null
+exists "$AI_MEM_ROOT/_transcripts/etc-evil.md" \
+  "a crafted source_id is slugified flat inside _transcripts/, never treated as a path"
+
+# ai-mem-search already covers the new folder for free -- no extra wiring.
+succeeds 'ai-mem-search "Design walkthrough"' "ai-mem-search covers _transcripts/ with no extra path"
+
+export AI_MEM_ROOT="$ING_SAVE_ROOT"
+
 # --- summary ------------------------------------------------------------------
 print -r -- "----"
 print -r -- "$(( PASS + FAIL )) tests, $PASS passed, $FAIL failed"
