@@ -90,14 +90,22 @@ sequenceDiagram
     Agent->>Vault: rewrite Auto Session Log (branch, commits, changes)
     Agent->>Backup: commit + push, if the vault is git-backed
     Note over Vault: nothing overwritten -- a fresh file every session
+    Note over Vault: overnight, on its own (ai-mem-sleep-schedule)
+    Vault->>Vault: archive session logs older than 90d, newest 5 per project kept
+    Vault->>Vault: lint links, flag consolidation candidates
+    Vault->>Backup: commit + push the archive move, if the vault is git-backed
+    Note over Vault: _lessons/ are never archived and never pruned
     You->>Shell: claude-start (next time)
     Shell->>Vault: read prior session again
     Note over Shell,Vault: now includes what just happened
 ```
 
-Everything through step 10 touches only files on your machine. Step 11 is the
-only network call in the whole loop, and only exists if you set up a git-backed
-vault yourself; skip that and everything stays local, always.
+Everything through step 10 touches only files on your machine. Step 11 and
+step 14 are the only network calls in the whole loop, and both only exist if
+you set up a git-backed vault yourself; skip that and everything stays local,
+always. The overnight pass (steps 12-14) is the pruning half of the loop --
+what decays, what is consolidated, and what is never touched is set out in
+[Memory hygiene](#memory-hygiene).
 
 ## See a full session
 
@@ -325,7 +333,7 @@ second you write it.
 ```mermaid
 flowchart TD
     A(["You look for a word"]) --> B{"Did you name<br/>a project?"}
-    B -->|"no"| C["Look through<br/>every note you have"]
+    B -->|"no"| C["Look through every note<br/>outside _archive/"]
     B -->|"yes"| D["Look only inside<br/>that project"]
     C --> E["Read them all.<br/>Capitals don't matter.<br/>Punctuation means itself."]
     D --> E
