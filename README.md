@@ -65,7 +65,8 @@ machines by pointing at the same folder.
 
 Agents read the vault through `ai-mem.zsh` at launch and write to it through a Stop
 hook at close. You read the same files in Obsidian, or through `ai-mem-search` and
-`ai-mem-lint`. Neither side gets a privileged interface — it's the same folder either way.
+`ai-mem-lint`. Overnight, `ai-mem-sleep` tidies the same folder. Neither side gets a
+privileged interface — it's the same folder either way.
 
 ```mermaid
 sequenceDiagram
@@ -74,6 +75,7 @@ sequenceDiagram
     participant Shell as claude-start
     participant Agent as Claude Code
     participant Vault as _Ai_Memory
+    participant Sleep as ai-mem-sleep
     participant Backup as git backup (optional)
 
     You->>Shell: claude-start
@@ -90,11 +92,11 @@ sequenceDiagram
     Agent->>Vault: rewrite Auto Session Log (branch, commits, changes)
     Agent->>Backup: commit + push, if the vault is git-backed
     Note over Vault: nothing overwritten -- a fresh file every session
-    Note over Vault: overnight, on its own (ai-mem-sleep-schedule)
-    Vault->>Vault: archive session logs older than 90d, newest 5 per project kept
-    Vault->>Vault: lint links, flag consolidation candidates
-    Vault->>Backup: commit + push the archive move, if the vault is git-backed
-    Note over Vault: _lessons/ are never archived and never pruned
+    Note over Sleep: overnight, unattended -- installed by ai-mem-sleep-schedule
+    Sleep->>Vault: archive session logs older than 90d, newest 5 per project kept
+    Sleep->>Vault: lint links, flag dangling wikilinks and consolidation candidates
+    Sleep->>Backup: commit + push the archive move, if the vault is git-backed
+    Note over Vault,Sleep: _lessons/ are never archived and never pruned
     You->>Shell: claude-start (next time)
     Shell->>Vault: read prior session again
     Note over Shell,Vault: now includes what just happened
