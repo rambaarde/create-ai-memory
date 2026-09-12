@@ -303,12 +303,16 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
+| `ai-mem-ingest --source-id <id> --title <t> --date <ISO> [...]` | File a distilled external artifact -- a meeting, a recorded call, a video, a voice note -- as one note in `_transcripts/`. Writes the summary, decisions, action items, attendee `[[wikilinks]]` and a link to the source; it never embeds the raw transcript body, because a full transcript is bulk the agent pays for and rarely needs. Re-ingesting the same `--source-id` updates that one note instead of filing a second copy. `ai-mem-search` covers `_transcripts/` with no extra path |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, notes missing the `type:` field, and **dangling `[[wikilinks]]`** -- a link pointing at a note that does not exist (a dead edge in the graph), reported but never auto-removed. `--fix` backfills `type:` into session logs written before the field existed |
 | `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs). Lessons rank first, and within them by *reinforcement* -- a lesson recalled more often (more dated entries) ranks above a once-seen one -- then by date; archived logs (see `ai-mem-sleep`) are skipped. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 25) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
 | `ai-mem-sleep [--apply]` | The vault's "bedtime" pass: archive stale session logs, flag consolidation candidates, and lint, in one run. Session logs older than `AI_MEM_SLEEP_DAYS` (default 90) move out of the hot search path -- always keeping the newest `AI_MEM_SLEEP_KEEP` (default 5) per project -- while `_lessons/` are never touched, because durable failure->fix knowledge is exactly what must survive. Dry-run by default; `--apply` moves logs into each project's `_archive/` (reversible via git) and backs up |
 | `ai-mem-sleep-schedule [--install\|--uninstall] [--at HH:MM]` | Run the bedtime pass on its own, nightly (default 03:00). macOS installs a launchd agent; other platforms a crontab entry. The scheduled job sources the module first, since a cron/launchd shell does not read `~/.zshrc`. Dry-run by default -- prints exactly what it would install; `--install` schedules it, `--uninstall` removes it |
 | `ai-mem-serve [port] [--no-open]` | Open the vault as a browsable graph on `127.0.0.1`. Agents run this for you when you ask to see your memory (see [Graph view](#graph-view)) |
 | `ai-mem-vault-backup` | Commit and push the vault if it's git-backed. `ai-note`/`ai-lesson` already call this; use it directly after editing a session log or project note by hand |
+
+`codex-note` and `codex-lesson` are aliases of `ai-note` and `ai-lesson`, for
+muscle memory inside a Codex session; they behave identically.
 
 Project is auto-resolved from the current git repo; pass a name to override.
 
@@ -485,8 +489,10 @@ know you have. So the launch prompt lists **every lesson slug and no bodies**:
 ```
 
 A slug is the lesson compressed: `prisma-connection-pool-exhaustion` tells
-you whether to open it without opening it. ~8 tokens each; 96 lessons cost
-~830.
+you whether to open it without opening it. ~8-10 tokens each, so the index
+grows slowly: 96 lessons cost ~830, and a vault grown to 182 lessons costs
+~1,740 (`ai-context | grep -A3 'Lessons already recorded' | wc -c`, chars divided
+by ~4).
 
 Newest first, capped at `AI_MEM_LESSON_INDEX_LIMIT` (200). The cap matters —
 past a few hundred, most titles are irrelevant to any given session, and a
@@ -622,6 +628,9 @@ $AI_MEM_ROOT/
   _lessons/
     _lesson_template.md       scaffold for new lesson topics
     <topic-slug>.md            cross-project decisions/mistakes, filed by ai-lesson
+  _transcripts/
+    <source-id>.md             distilled meetings, calls, videos and voice notes,
+                               filed by ai-mem-ingest
 ```
 
 Notes are created from templates on first use and never overwritten. Edit
@@ -805,6 +814,7 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_NOTE_MAX_CHARS` | `8000` | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
 | `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
+| `AI_MEM_HOME` | the module's own directory | Exported by the module when it is sourced, not set by you. A cron job, a launchd agent or any non-interactive shell can re-source the module with `zsh -c 'source "$AI_MEM_HOME/ai-mem.zsh"; ...'` instead of a hard-coded path |
 | `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
 
 ## Why not just CLAUDE.md?
@@ -882,11 +892,11 @@ afternoon and carry anywhere.
 
 Offline unit suite (throwaway vault and git repo, no network): path guarding,
 project resolution, session prep, the context prompt, the skill picker, launcher
-generation, adapter dispatch, the commit token, `ai-note`, and the cursor rule
-file.
+generation, adapter dispatch, the commit token, `ai-note`, `ai-mem-ingest`, and
+the cursor rule file.
 
 ```sh
-zsh tests/run.sh     # offline unit tests (305 assertions)
+zsh tests/run.sh     # offline unit tests (340 assertions)
 zsh tests/smoke.sh   # live: launches each agent headlessly, checks it responds
 ```
 
