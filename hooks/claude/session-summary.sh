@@ -15,6 +15,16 @@ log="${AI_MEM_ACTIVE_SESSION_LOG:-}"
 [ -n "$log" ] || exit 0
 [ -f "$log" ] || exit 0
 
+# The launcher's exports outlive the agent in the user's shell, so a later
+# plain `claude` in another repo inherits them and would write that repo's
+# commits into this project's log. Write only in the repo the session was
+# launched in (any worktree of it). Unset = an older launcher.
+# Same guard as session-start.sh; keep the two in step.
+if [ -n "${AI_MEM_ACTIVE_GIT_DIR:-}" ]; then
+    here="$(cd "$(git rev-parse --git-common-dir 2>/dev/null || echo /nonexistent)" 2>/dev/null && pwd -P || true)"
+    [ "$here" = "$AI_MEM_ACTIVE_GIT_DIR" ] || exit 0
+fi
+
 marker="## Auto Session Log"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(no git)')"
@@ -47,9 +57,18 @@ ${changes}
 EOF
 )"
 
-# Strip any previous auto block (from marker to EOF), then append the fresh one.
+# Strip the previous auto block, then append the fresh one. Strip only the
+# block: ai-note appends Live Notes at EOF, so after the first Stop they sit
+# below the block. Cutting from the marker to EOF erased them. The block ends
+# after the "- " lines under its last bullet; the blank line that ai-note puts
+# before each note ends it.
 tmp="$(mktemp)"
-awk -v m="$marker" 'index($0, m)==1 { exit } { print }' "$log" > "$tmp"
+awk -v m="$marker" '
+    index($0, m) == 1 { inblock = 1; last = 0; next }
+    inblock && /^\* \*\*Uncommitted changes/ { last = 1; next }
+    inblock && last && !/^- / { inblock = 0; if ($0 == "") next }
+    !inblock { print }
+' "$log" > "$tmp"
 printf '%s\n\n%s\n' "$(cat "$tmp")" "$block" > "$log"
 rm -f "$tmp"
 
