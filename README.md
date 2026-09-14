@@ -430,6 +430,8 @@ tool and you want a real index.
 
 **Pushed once at launch** (~4,300 tokens): your profile, standards, the
 project note's path, a digest of the last session, and the lesson topics.
+The last session is the newest log with content. A log that is still the
+unfilled template (a session opened and closed without notes) is skipped.
 
 **Pulled on demand after that.** Nothing re-injects. The agent reaches the
 vault mid-session only by running `ai-mem-search` itself — which the launch
@@ -783,6 +785,28 @@ re-sent every turn: six tools cost ~429 tokens/turn, the brief ~290 once.
 **Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
 opencode have a shell and should call `ai-mem-search` directly.
 
+**A desktop app that has a shell but no launcher** (the Codex app, for
+example) gets no vault context, because nothing runs `codex-start` for it.
+Without instructions, it guesses: it takes the newest log in the vault, which
+can be a different project. Put the rules in the app's global instruction file
+(`~/.codex/AGENTS.md` for Codex). A GUI app does not read `~/.zshrc`, so give
+the vault path and the module path explicitly:
+
+```md
+## AI memory vault
+Before you answer a question about a project, load its context:
+`AI_MEM_ROOT=/abs/path/_Ai_Memory zsh -c 'source /abs/path/create-ai-memory/shell/ai-mem.zsh; ai-context <project>'`
+- <project> is the name the user gives, or the git repo folder name.
+- If the user gives no project and the folder is not a git repo, STOP and ask.
+  A folder that is not a repo does not give a project name. Do not guess.
+- If `_projects/<project>.md` does not exist, ask before you continue:
+  `ai-context` makes a new empty project for a name that is not correct.
+- Skip this step if the prompt already contains vault context.
+- To record a note, use the same form with `AI_MEM_ACTIVE_PROJECT=<project>` added
+  and `ai-note "<text>"`. Outside a repo, that variable names the project.
+  Each shell command starts a new process, so set it on every call.
+```
+
 ### Claude Code hooks
 The files live in `hooks/claude/`. Record repo `HEAD` at session start, then on
 exit write an auto block to the log with the branch, commits made this session, and
@@ -795,7 +819,11 @@ the session can never get stuck refusing to compact. It only guards
 auto-compact, not a deliberate `/compact`. Merge `settings.snippet.json` into
 `~/.claude/settings.json`, replacing `<AI_MEM_HOME>` with an absolute path.
 All three hooks no-op for plain `claude` runs; they gate on
-`$AI_MEM_ACTIVE_SESSION_LOG`. This is Claude-Code-specific -- other agents
+`$AI_MEM_ACTIVE_SESSION_LOG`. That variable stays exported in your shell after
+the agent exits, so the session-start and Stop hooks also check
+`$AI_MEM_ACTIVE_GIT_DIR`: they write only in the repo the session was launched
+in, or a worktree of it. A later plain `claude` in a different repo does not
+put that repo's commits in the wrong project's log. This is Claude-Code-specific -- other agents
 (Codex, Gemini, etc.) have no equivalent pre-compaction hook, so jotting
 things down with `ai-note`/`codex-note` as you go still matters there.
 

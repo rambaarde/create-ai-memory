@@ -111,6 +111,22 @@ OTHERPROJ="$(__ai_mem_prepare_session othernewproj)"
 OTHERPROJ_NOTE="${OTHERPROJ##*|}"
 has "$(<"$OTHERPROJ_NOTE")" 'project: "[[othernewproj]]"' "a brand-new project also gets a correct project wikilink"
 has "$(<"$OTHERPROJ_NOTE")" 'previous: ""'                 "a brand-new project's first session is isolated from another project's chain"
+
+# --- 3c. the prior log is the newest one with content, not the newest file ----
+# A session opened and closed leaves an untouched template. Handing that to the
+# next session as "where you left off" carries nothing over.
+SKIPDIR="$AI_MEM_SESSION_DIR/skipproj"
+mkdir -p "$SKIPDIR"
+print -r -- $'---\ntype: ai-session-log\n---\n\n# Session Outcome\n* **High-Level Summary:** real work' \
+  > "$SKIPDIR/skipproj-2026-01-01_10-00-00.md"
+print -r -- $'---\ntype: ai-session-log\n---\n\n# Session Outcome\n* **High-Level Summary:** [What changed or was decided]\n* **Next Step:** [Most important follow-up]' \
+  > "$SKIPDIR/skipproj-2026-01-02_10-00-00.md"
+is "$(__ai_mem_latest_session_log skipproj)" "$SKIPDIR/skipproj-2026-01-01_10-00-00.md" \
+  "an unfilled newer log is skipped for the newest one with content"
+print -r -- $'\n## 10:00\n- a note' >> "$SKIPDIR/skipproj-2026-01-02_10-00-00.md"
+is "$(__ai_mem_latest_session_log skipproj)" "$SKIPDIR/skipproj-2026-01-02_10-00-00.md" \
+  "a note under unfilled bullets counts as content"
+# All-unfilled chains keep the newest file: section 3b's LT3 -> LT2 link covers it.
 # --- 4. context prompt embeds the whole memory stack --------------------------
 # Redirect (not $()) so ai-context runs in THIS shell and its exports survive.
 CTXFILE="$(mktemp)"
@@ -124,6 +140,7 @@ has "$ctx" "ai-mem-search"                                 "context prompt tells
 has "$ctx" "ai-mem-lint"                                   "context prompt tells the agent ai-mem-lint exists"
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "$AI_MEM_ROOT"        "active session log is exported under the vault"
 has "${AI_MEM_ACTIVE_SESSION_LOG:-}" "demoproj"            "active session log belongs to this project"
+is "${AI_MEM_ACTIVE_GIT_DIR:-}" "${WORK:A}/.git"         "the launch repo's git dir is exported for the hooks"
 
 # --- 4b. prior session's Session Outcome bullets inline directly, no extra file
 PREVLOG="$AI_MEM_SESSION_DIR/demoproj/demoproj-2026-08-20_10-00-00.md"
@@ -494,6 +511,42 @@ succeeds 'AI_MEM_ACTIVE_SESSION_LOG="$PCVAULT_LOG" bash "$REPO_ROOT/hooks/claude
 
 succeeds 'env -u AI_MEM_ACTIVE_SESSION_LOG bash "$REPO_ROOT/hooks/claude/pre-compact.sh"' \
   "pre-compact hook no-ops outside a claude-start session"
+
+# --- 12c. hooks write only in the repo the session was launched in ------------
+# Launcher exports outlive the agent in the user's shell. A later plain
+# `claude` in another repo inherits them, and once wrote that repo's commits
+# into the wrong project's log.
+GUARD_A="$(mktemp -d)/repo-a"; GUARD_B="$(mktemp -d)/repo-b"
+for r in "$GUARD_A" "$GUARD_B"; do
+  mkdir -p "$r"; git -C "$r" init -q
+  git -C "$r" -c user.email=t@t.com -c user.name=t commit -q --allow-empty -m init
+done
+git -C "$GUARD_A" worktree add -q "${GUARD_A}-wt" 2>/dev/null
+GUARD_LOG="$(mktemp -d)/guard.md"
+print -r -- "# Session Outcome" > "$GUARD_LOG"
+guard_hook() {  # guard_hook <dir> <hook>: run a hook from <dir> as a session launched in repo A
+  (cd "$1" && AI_MEM_ROOT="$(mktemp -d)" AI_MEM_ACTIVE_GIT_DIR="${GUARD_A:A}/.git" \
+    AI_MEM_ACTIVE_SESSION_LOG="$GUARD_LOG" bash "$REPO_ROOT/hooks/claude/$2" >/dev/null 2>&1)
+}
+guard_hook "$GUARD_B" session-start.sh
+[[ ! -e "${GUARD_LOG%.md}.startsha" ]] && ok "session-start hook skips a repo the session was not launched in" \
+  || nok "session-start hook skips a repo the session was not launched in"
+guard_hook "$GUARD_B" session-summary.sh
+hasnt "$(<"$GUARD_LOG")" "Auto Session Log" "session-summary hook skips a repo the session was not launched in"
+guard_hook "${GUARD_A}-wt" session-start.sh
+exists "${GUARD_LOG%.md}.startsha"            "session-start hook runs in a worktree of the launch repo"
+guard_hook "${GUARD_A}-wt" session-summary.sh
+has "$(<"$GUARD_LOG")" "Auto Session Log"   "session-summary hook runs in a worktree of the launch repo"
+
+# ai-note appends at EOF, below the auto block. The next Stop rewrites the
+# block and once cut from its marker to EOF, which erased every such note.
+print -r -- $'\n### Live Notes\n\n- 10:00 keep this note' >> "$GUARD_LOG"
+guard_hook "${GUARD_A}-wt" session-summary.sh
+print -r -- $'\n- 10:05 and this later one' >> "$GUARD_LOG"
+guard_hook "${GUARD_A}-wt" session-summary.sh
+has "$(<"$GUARD_LOG")" "keep this note"          "session-summary hook keeps a note written below the auto block"
+has "$(<"$GUARD_LOG")" "and this later one"      "session-summary hook keeps a note appended after a rewrite"
+is "$(grep -c '^## Auto Session Log' "$GUARD_LOG")" "1" "session-summary hook leaves exactly one auto block"
 
 # --- 13. ai-mem-lint catches broken/orphaned links -----------------------------
 LINTVAULT="$(mktemp -d)"

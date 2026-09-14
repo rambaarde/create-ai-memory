@@ -343,14 +343,30 @@ __ai_mem_latest_session_log() {
         project_name="$(__ai_mem_resolve_project)"
     fi
 
-    local latest=""
+    local logs="" latest=""
     local project_session_dir
     project_session_dir="$(__ai_mem_project_session_dir "$project_name")"
 
-    latest="$(find "$project_session_dir" -maxdepth 1 -type f -name "${project_name}-*.md" 2>/dev/null | sort | tail -n 1)" || true
-    if [[ -z "$latest" ]]; then
-        latest="$(find "$AI_MEM_SESSION_DIR" -maxdepth 1 -type f -name "${project_name}-*.md" 2>/dev/null | sort | tail -n 1)" || true
+    logs="$(find "$project_session_dir" -maxdepth 1 -type f -name "${project_name}-*.md" 2>/dev/null | sort -r)" || true
+    if [[ -z "$logs" ]]; then
+        logs="$(find "$AI_MEM_SESSION_DIR" -maxdepth 1 -type f -name "${project_name}-*.md" 2>/dev/null | sort -r)" || true
     fi
+    [[ -n "$logs" ]] || return 0
+
+    # The newest file is often an untouched template: a session that was
+    # opened and closed, or one still running in another terminal. Pointing
+    # the next session at it hands over nothing, while real context sits one
+    # file back. So take the newest log with any line that is not template
+    # scaffolding (frontmatter, blanks, the heading, [placeholder] bullets).
+    # One awk pass over newest-first files, stopping at the first hit. When
+    # every log is unfilled, keep the newest, as before.
+    latest="$(awk '
+        FNR == 1 { fm = ($0 == "---"); if (fm) next }
+        fm { if ($0 == "---") fm = 0; next }
+        /^[[:space:]]*$/ || $0 == "# Session Outcome" || /^\* \*\*[^*]+:\*\*[[:space:]]*\[.*\]$/ { next }
+        { print FILENAME; exit }
+    ' "${(@f)logs}" 2>/dev/null)" || true
+    [[ -n "$latest" ]] || latest="${logs%%$'\n'*}"
     if [[ -n "$latest" ]]; then
         __ai_mem_guard "$latest" || return 1
         print -r -- "$latest"
@@ -624,6 +640,13 @@ __ai_mem_export_active() {
     export AI_MEM_ACTIVE_PROJECT="${1:-}"
     export AI_MEM_PREVIOUS_SESSION_LOG="${2:-}"
     export AI_MEM_ACTIVE_SESSION_LOG="${3:-}"
+    # These exports outlive the agent in the user's shell. The Claude hooks
+    # compare this against the repo they run in, so a later plain `claude` in a
+    # different repo does not write that repo's commits into this project's log.
+    # The common dir, not the toplevel, so every worktree of one repo matches.
+    local git_dir
+    git_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || git_dir=""
+    export AI_MEM_ACTIVE_GIT_DIR="${git_dir:+${git_dir:A}}"
 }
 
 ai-start() {
