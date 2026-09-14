@@ -15,6 +15,16 @@ log="${AI_MEM_ACTIVE_SESSION_LOG:-}"
 [ -n "$log" ] || exit 0
 [ -f "$log" ] || exit 0
 
+# The launcher's exports outlive the agent in the user's shell, so a later
+# plain `claude` in another repo inherits them and would write that repo's
+# commits into this project's log. Write only in the repo the session was
+# launched in (any worktree of it). Unset = an older launcher.
+# Same guard as session-start.sh; keep the two in step.
+if [ -n "${AI_MEM_ACTIVE_GIT_DIR:-}" ]; then
+    here="$(cd "$(git rev-parse --git-common-dir 2>/dev/null || echo /nonexistent)" 2>/dev/null && pwd -P || true)"
+    [ "$here" = "$AI_MEM_ACTIVE_GIT_DIR" ] || exit 0
+fi
+
 marker="## Auto Session Log"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(no git)')"
