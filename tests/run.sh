@@ -538,6 +538,16 @@ exists "${GUARD_LOG%.md}.startsha"            "session-start hook runs in a work
 guard_hook "${GUARD_A}-wt" session-summary.sh
 has "$(<"$GUARD_LOG")" "Auto Session Log"   "session-summary hook runs in a worktree of the launch repo"
 
+# ai-note appends at EOF, below the auto block. The next Stop rewrites the
+# block and once cut from its marker to EOF, which erased every such note.
+print -r -- $'\n### Live Notes\n\n- 10:00 keep this note' >> "$GUARD_LOG"
+guard_hook "${GUARD_A}-wt" session-summary.sh
+print -r -- $'\n- 10:05 and this later one' >> "$GUARD_LOG"
+guard_hook "${GUARD_A}-wt" session-summary.sh
+has "$(<"$GUARD_LOG")" "keep this note"          "session-summary hook keeps a note written below the auto block"
+has "$(<"$GUARD_LOG")" "and this later one"      "session-summary hook keeps a note appended after a rewrite"
+is "$(grep -c '^## Auto Session Log' "$GUARD_LOG")" "1" "session-summary hook leaves exactly one auto block"
+
 # --- 13. ai-mem-lint catches broken/orphaned links -----------------------------
 LINTVAULT="$(mktemp -d)"
 mkdir -p "$LINTVAULT/_session_logs/lintproj" "$LINTVAULT/_projects"

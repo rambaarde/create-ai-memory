@@ -57,9 +57,18 @@ ${changes}
 EOF
 )"
 
-# Strip any previous auto block (from marker to EOF), then append the fresh one.
+# Strip the previous auto block, then append the fresh one. Strip only the
+# block: ai-note appends Live Notes at EOF, so after the first Stop they sit
+# below the block. Cutting from the marker to EOF erased them. The block ends
+# after the "- " lines under its last bullet; the blank line that ai-note puts
+# before each note ends it.
 tmp="$(mktemp)"
-awk -v m="$marker" 'index($0, m)==1 { exit } { print }' "$log" > "$tmp"
+awk -v m="$marker" '
+    index($0, m) == 1 { inblock = 1; last = 0; next }
+    inblock && /^\* \*\*Uncommitted changes/ { last = 1; next }
+    inblock && last && !/^- / { inblock = 0; if ($0 == "") next }
+    !inblock { print }
+' "$log" > "$tmp"
 printf '%s\n\n%s\n' "$(cat "$tmp")" "$block" > "$log"
 rm -f "$tmp"
 
