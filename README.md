@@ -797,7 +797,10 @@ the vault path and the module path explicitly:
 Before you answer a question about a project, load its context:
 `AI_MEM_ROOT=/abs/path/_Ai_Memory zsh -c 'source /abs/path/create-ai-memory/shell/ai-mem.zsh; ai-context <project>'`
 - <project> is the name the user gives, or the git repo folder name.
-- If the user gives no project and the folder is not a repo, ask. Do not guess.
+- If the user gives no project and the folder is not a git repo, STOP and ask.
+  A folder that is not a repo does not give a project name. Do not guess.
+- If `_projects/<project>.md` does not exist, ask before you continue:
+  `ai-context` makes a new empty project for a name that is not correct.
 - Skip this step if the prompt already contains vault context.
 - To record a note, use the same form with `AI_MEM_ACTIVE_PROJECT=<project>` added
   and `ai-note "<text>"`. Outside a repo, that variable names the project.
