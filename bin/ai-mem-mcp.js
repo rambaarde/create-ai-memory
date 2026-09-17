@@ -53,7 +53,13 @@ const VERSION = (() => {
 function zsh(snippet) {
   const r = spawnSync('zsh', ['-c', `source ${JSON.stringify(MODULE)} >/dev/null 2>&1\n${snippet}`], {
     encoding: 'utf8',
-    env: { ...process.env, AI_MEM_ROOT: VAULT },
+    // GUI context must include the complete profile and standards by default.
+    // Callers can still set AI_MEM_NOTE_MAX_CHARS to restore a smaller cap.
+    env: {
+      ...process.env,
+      AI_MEM_ROOT: VAULT,
+      AI_MEM_NOTE_MAX_CHARS: process.env.AI_MEM_NOTE_MAX_CHARS ?? '0',
+    },
     maxBuffer: 8 * 1024 * 1024,
   });
   if (r.error) return { ok: false, text: `failed to run zsh: ${r.error.message}` };

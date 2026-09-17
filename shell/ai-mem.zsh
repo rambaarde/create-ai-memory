@@ -444,7 +444,8 @@ __ai_mem_prepare_session() {
     project_session_dir="$(__ai_mem_project_session_dir "$project_name")"
     local previous_session_note=""
     previous_session_note="$(__ai_mem_latest_session_log "$project_name")" || return 1
-    local session_note="$project_session_dir/${project_name}-$(date +%Y-%m-%d_%H-%M-%S).md"
+    local session_stamp="$(date +%Y-%m-%d_%H-%M-%S)"
+    local session_note="$project_session_dir/${project_name}-${session_stamp}.md"
 
     __ai_mem_guard "$project_note" || return 1
     __ai_mem_guard "$session_note" || return 1
@@ -456,13 +457,29 @@ __ai_mem_prepare_session() {
             "$AI_MEM_PROJECT_DIR/_project_template.md" > "$project_note"
     fi
 
+    # A blank note with this second's timestamp belongs to a separate session.
+    # Wait for the next timestamp instead of overwriting its previous-session
+    # link. A note with Live Notes is the active GUI/CLI session and must be
+    # reused.
+    if [[ -f "$session_note" ]] && ! grep -q '^### Live Notes' "$session_note" 2>/dev/null; then
+        while [[ -f "$session_note" ]]; do
+            sleep 1
+            session_stamp="$(date +%Y-%m-%d_%H-%M-%S)"
+            session_note="$project_session_dir/${project_name}-${session_stamp}.md"
+        done
+    fi
+
     local prev_link=""
     if [[ -n "$previous_session_note" ]]; then
         prev_link="[[${previous_session_note:t:r}]]"
     fi
 
-    SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" PREV_LINK="$prev_link" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g; s/\{\{previous_session_link\}\}/$ENV{PREV_LINK}/g' \
-        "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"
+    # Context reads can follow a GUI write in the same second. Reusing an
+    # existing timestamped note preserves Live Notes and any other append.
+    if [[ ! -f "$session_note" ]]; then
+        SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" PREV_LINK="$prev_link" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g; s/\{\{previous_session_link\}\}/$ENV{PREV_LINK}/g' \
+            "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"
+    fi
 
     export AI_MEM_ACTIVE_PROJECT="$project_name"
     export AI_MEM_PREVIOUS_SESSION_LOG="$previous_session_note"
