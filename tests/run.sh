@@ -955,6 +955,13 @@ MCPVAULT="$(mktemp -d)/_Ai_Memory"
 AI_MEM_ROOT="$MCPVAULT" "$REPO_ROOT/install.sh" >/dev/null
 mkdir -p "$MCPVAULT/_lessons"
 print -rl -- "---" "type: ai-lesson" "---" "vault holds a needle" > "$MCPVAULT/_lessons/mcp-probe.md"
+# GUI MCP context must not lose a long engineering profile to the shell launch cap.
+{
+  print -rl -- "---" "type: ai-global-profile" "---"
+  for i in {1..1200}; do print -r -- "profile-filler-$i"; done
+  print -r -- "GUI_PROFILE_SENTINEL"
+} > "$MCPVAULT/_Global_Profile.md"
+print -rl -- "---" "type: ai-standards" "mirror_of: _Global_Profile.md" "---" "GUI_STANDARDS_SENTINEL" > "$MCPVAULT/_Standards.md"
 
 MCP_IN="$(mktemp)"
 {
@@ -970,14 +977,15 @@ MCP_IN="$(mktemp)"
   print -r -- '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"add_lesson","arguments":{"topic":"mcp-probe-lesson","problem":"p","solution":"s"}}}'
   print -r -- '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"add_lesson","arguments":{"topic":"only-a-topic"}}}'
   print -r -- '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"written by a GUI client"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
 } > "$MCP_IN"
 
 MCP_OUT="$(mktemp)"
 # Run from inside a git repo so project resolution has something to resolve.
-( cd "$WORK" && AI_MEM_ROOT="$MCPVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" < "$MCP_IN" 2>/dev/null > "$MCP_OUT" )
+( cd "$WORK" && env -u AI_MEM_NOTE_MAX_CHARS AI_MEM_ROOT="$MCPVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" < "$MCP_IN" 2>/dev/null > "$MCP_OUT" )
 
 # Every reply must be one line of valid JSON, and a notification must get none.
-is "$(wc -l < "$MCP_OUT" | tr -d ' ')" "11" "MCP server answers every request and never answers a notification"
+is "$(wc -l < "$MCP_OUT" | tr -d ' ')" "12" "MCP server answers every request and never answers a notification"
 if node -e 'require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").forEach(l=>JSON.parse(l))' "$MCP_OUT" 2>/dev/null; then
   ok "MCP server emits one valid JSON object per line"
 else
@@ -1021,6 +1029,9 @@ fi
 exists "$MCPVAULT/_lessons/mcp-probe-lesson.md" "MCP add_lesson creates the cross-project lesson file"
 # The round trip is the point: what a GUI writes must be findable afterwards.
 has "$(mcpfield 11 text)" "match(es)" "what a GUI writes is immediately findable by search"
+has "$(mcpfield 12 text)" "GUI_PROFILE_SENTINEL" "GUI MCP context includes the complete global profile"
+has "$(mcpfield 12 text)" "GUI_STANDARDS_SENTINEL" "GUI MCP context includes standards additions"
+hasnt "$(mcpfield 12 text)" "truncated at" "GUI MCP context does not truncate engineering standards"
 
 # instructions is how a GUI learns the vault exists at all. Without it a model
 # has no reason to call any of these tools.

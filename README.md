@@ -466,7 +466,7 @@ that can grow without limit is a cost that compounds silently.
 
 | what reaches the prompt | bound |
 |---|---|
-| Profile and standards | **8,000 chars** each (`AI_MEM_NOTE_MAX_CHARS`) |
+| Profile and standards | **8,000 chars** each for shell launchers; GUI MCP is uncapped by default (`AI_MEM_NOTE_MAX_CHARS`) |
 | Previous session outcome | 4 fields, 500 chars each |
 | Lesson index | 200 slugs, names only |
 | Project note | **a path, not its contents** |
@@ -850,7 +850,7 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_AGENTS` | `claude codex agy gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
-| `AI_MEM_NOTE_MAX_CHARS` | `8000` | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
+| `AI_MEM_NOTE_MAX_CHARS` | `8000` for shell launchers; `0` for GUI MCP | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
 | `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
 | `AI_MEM_HOME` | the module's own directory | Exported by the module when it is sourced, not set by you. A cron job, a launchd agent or any non-interactive shell can re-source the module with `zsh -c 'source "$AI_MEM_HOME/ai-mem.zsh"; ...'` instead of a hard-coded path |
 | `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
