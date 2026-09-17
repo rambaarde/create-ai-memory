@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.1](https://github.com/rambaarde/create-ai-memory/compare/v0.15.0...v0.15.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **mcp:** preserve full GUI memory context ([cc175e2](https://github.com/rambaarde/create-ai-memory/commit/cc175e24bde3579383df00a9f0836e234beef99f))
+* **mcp:** preserve full GUI memory context ([93c176c](https://github.com/rambaarde/create-ai-memory/commit/93c176cf32d34ef426cd2eb85093e6af7ffac667))
+* **session:** preserve notes across same-second context reads ([895ead9](https://github.com/rambaarde/create-ai-memory/commit/895ead9308e1c7fc040da0c35db49c3a557818bd))
+
 ## [0.15.0](https://github.com/rambaarde/create-ai-memory/compare/v0.14.7...v0.15.0) (2026-09-14)
 
 
