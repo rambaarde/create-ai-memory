@@ -1021,7 +1021,13 @@ has "$(mcpfield 8 error)" "method not found" "MCP server rejects an unknown meth
 is  "$(mcpfield 7 isError)" "false" "MCP add_note succeeds"
 is  "$(mcpfield 9 isError)" "false" "MCP add_lesson succeeds"
 is  "$(mcpfield 10 isError)" "true" "MCP add_lesson refuses a call missing problem and solution"
-if grep -rq "written by a GUI client" "$MCPVAULT/_session_logs" 2>/dev/null; then
+# Validate the exact destination returned by add_note. Recursive grep can hide
+# a wrong path and behaves differently when a fixture has extra entries.
+MCP_NOTE_PATH="$(mcpfield 7 text)"
+MCP_NOTE_PATH="${MCP_NOTE_PATH#Appended to }"
+MCPVAULT_REAL="$(cd "$MCPVAULT" && pwd -P)"
+if [[ "$MCP_NOTE_PATH" == "$MCPVAULT_REAL/_session_logs/"* ]] &&
+   [[ -f "$MCP_NOTE_PATH" ]] && grep -q "written by a GUI client" "$MCP_NOTE_PATH" 2>/dev/null; then
   ok "MCP add_note lands in the session log on disk"
 else
   nok "MCP add_note lands in the session log on disk"
