@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.2](https://github.com/rambaarde/create-ai-memory/compare/v0.15.1...v0.15.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* **mcp:** prime GUI clients with global standards ([6069e47](https://github.com/rambaarde/create-ai-memory/commit/6069e4760b22a25ce483cbea708988ba03704ac6))
+* **mcp:** prime GUI clients with global standards ([8510d23](https://github.com/rambaarde/create-ai-memory/commit/8510d237cb9af853a1b4eb7cb62e109efed9efa6))
+* **mcp:** prime GUI clients with global standards ([e540788](https://github.com/rambaarde/create-ai-memory/commit/e540788c52d21baa060a54f4b40074b46728b911))
+
 ## [0.15.1](https://github.com/rambaarde/create-ai-memory/compare/v0.15.0...v0.15.1) (2026-09-17)
 
 
