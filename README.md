@@ -777,10 +777,10 @@ Six tools, read **and** write, so a GUI session is not a dead end:
 implementation, not a copy that drifts. A note written from Claude Desktop is
 committed and pushed exactly like one written in a terminal.
 
-MCP's `instructions` field carries a standing brief (read context first,
-search before solving, write back after) — without it a model has no reason
-to suspect a memory exists. Tool descriptions stay terse because schemas are
-re-sent every turn: six tools cost ~429 tokens/turn, the brief ~290 once.
+The MCP initialization response carries the global profile and standards, plus
+a standing brief (read context first, search before solving, write back after)
+-- without it a model has no reason to suspect a memory exists. Tool
+descriptions stay terse because schemas are re-sent every turn.
 
 **Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
 opencode have a shell and should call `ai-mem-search` directly.

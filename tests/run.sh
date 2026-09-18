@@ -1050,6 +1050,15 @@ if node -e '
 else
   nok "MCP initialize returns instructions naming the read-first and write-back tools"
 fi
+if node -e '
+  const ls=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse);
+  const i=ls.find(x=>x.id==1).result.instructions || "";
+  process.exit(/GUI_PROFILE_SENTINEL/.test(i) && /GUI_STANDARDS_SENTINEL/.test(i) ? 0 : 1);
+' "$MCP_OUT"; then
+  ok "MCP initialize primes GUI clients with global profile and standards"
+else
+  nok "MCP initialize primes GUI clients with global profile and standards"
+fi
 
 # --- Open Knowledge Format: every note declares a `type` -----------------------
 # OKF names exactly one required frontmatter field. Every shipped template

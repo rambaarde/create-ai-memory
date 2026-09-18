@@ -75,6 +75,24 @@ function zsh(snippet) {
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
 /**
+ * Read one fixed vault note for the MCP instruction block.
+ *
+ * GUI models do not reliably call `get_context` before acting. The global
+ * profile and standards are therefore included in `initialize`, while
+ * project/session context stays in `get_context` because it needs a project.
+ *
+ * @param {string} rel vault-relative note path
+ * @returns {string}
+ */
+function readVaultNote(rel) {
+  try {
+    return readFileSync(join(VAULT, rel), 'utf8').trim();
+  } catch {
+    return `[missing: ${rel}]`;
+  }
+}
+
+/**
  * Resolve a note path and refuse anything outside the vault.
  *
  * Compares resolved real paths with a separator-terminated prefix, not a
@@ -112,6 +130,12 @@ function insideVault(p) {
  */
 const INSTRUCTIONS = [
   "This is the user's persistent memory across every AI tool they use: past sessions, project decisions, and lessons learned the hard way.",
+  '',
+  'These global profile and standards are active instructions for this session:',
+  '--- _Global_Profile.md ---',
+  readVaultNote('_Global_Profile.md'),
+  '--- _Standards.md ---',
+  readVaultNote('_Standards.md'),
   '',
   'Before answering anything about their work, call get_context. It returns their profile, standards, the current project note, and what the last session concluded.',
   'Before solving a problem, call search_memory -- they may have solved it already, and repeating a solved mistake is the failure this vault exists to prevent. Search broadly first; too specific a first query is the usual way to miss something.',
