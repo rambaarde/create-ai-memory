@@ -31,7 +31,10 @@ const { homedir } = require('node:os');
 const readline = require('node:readline');
 
 const MODULE = join(__dirname, '..', 'shell', 'ai-mem.zsh');
-const VAULT = process.env.AI_MEM_ROOT || join(homedir(), '.ai-memory', '_Ai_Memory');
+const VAULT_RAW = process.env.AI_MEM_ROOT || join(homedir(), '.ai-memory', '_Ai_Memory');
+const VAULT = existsSync(VAULT_RAW) ? realpathSync(VAULT_RAW) : VAULT_RAW;
+const GUI_PROJECT = process.env.AI_MEM_GUI_PROJECT || '_globalize_mem';
+const GUI_ROOT = join(VAULT, GUI_PROJECT);
 const VERSION = (() => {
   try {
     return JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')).version;
@@ -59,6 +62,8 @@ function zsh(snippet) {
       ...process.env,
       AI_MEM_ROOT: VAULT,
       AI_MEM_NOTE_MAX_CHARS: process.env.AI_MEM_NOTE_MAX_CHARS ?? '0',
+      AI_MEM_FORCE_PROJECT: GUI_PROJECT,
+      AI_MEM_GLOBALIZE_ROOT: GUI_ROOT,
     },
     maxBuffer: 8 * 1024 * 1024,
   });
@@ -171,7 +176,7 @@ const TOOLS = [
     description: 'The user\'s profile, standards, current project note, last session digest, and known lesson topics.',
     inputSchema: {
       type: 'object',
-      properties: { project: { type: 'string', description: 'Defaults to the active project.' } },
+      properties: { project: { type: 'string', description: 'Optional project. Defaults to the GUI global memory project.' } },
     },
   },
   {
@@ -185,7 +190,7 @@ const TOOLS = [
   },
   {
     name: 'add_note',
-    description: 'Append a timestamped note to today\'s session log. Use for what happened or was decided.',
+    description: 'Append a timestamped note to today\'s session log. GUI calls without a project use the GUI global memory project.',
     inputSchema: {
       type: 'object',
       properties: { text: { type: 'string', description: 'What to record.' } },
@@ -218,7 +223,7 @@ function callTool(name, args = {}) {
     case 'search_memory':
       return zsh(`ai-mem-search ${q(args.term)} ${args.project ? q(args.project) : ''}`);
     case 'get_context':
-      return zsh(`ai-context ${args.project ? q(args.project) : ''}`);
+      return zsh(`ai-context ${q(args.project || GUI_PROJECT)}`);
     // ai-note and ai-lesson both push the vault themselves, so a GUI write is
     // committed and backed up exactly like a terminal one -- no separate step
     // for the model to forget.

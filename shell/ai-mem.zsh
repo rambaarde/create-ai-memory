@@ -272,6 +272,13 @@ __ai_mem_note_contents() {
 }
 
 __ai_mem_resolve_project() {
+    # GUI/MCP clients have no repository context, so callers may force a
+    # memory bucket explicitly. Normal terminal launchers leave this unset.
+    if [[ -n "${AI_MEM_FORCE_PROJECT:-}" ]]; then
+        print -r -- "$AI_MEM_FORCE_PROJECT"
+        return 0
+    fi
+
     # Prefer the git repo we are actually standing in. Otherwise `cd`-ing between
     # projects in one shell keeps a stale AI_MEM_ACTIVE_PROJECT pinned, so a later
     # claude-start writes its log under the wrong project's folder.
@@ -295,6 +302,13 @@ __ai_mem_project_session_dir() {
     local project_name="${1:-}"
     if [[ -z "$project_name" ]]; then
         project_name="$(__ai_mem_resolve_project)"
+    fi
+
+    # GUI/MCP global memory should appear as its own top-level subtree in
+    # Obsidian, not as one more child under project-scoped session logs.
+    if [[ -n "${AI_MEM_GLOBALIZE_ROOT:-}" && "$project_name" == "${AI_MEM_FORCE_PROJECT:-}" ]]; then
+        print -r -- "$AI_MEM_GLOBALIZE_ROOT/_session_logs"
+        return 0
     fi
 
     print -r -- "$AI_MEM_SESSION_DIR/$project_name"
