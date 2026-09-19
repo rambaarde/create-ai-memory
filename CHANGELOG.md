@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.4](https://github.com/rambaarde/create-ai-memory/compare/v0.15.3...v0.15.4) (2026-09-19)
+
+
+### Bug Fixes
+
+* **mcp:** prime global GUI session on initialize ([82a835b](https://github.com/rambaarde/create-ai-memory/commit/82a835b66bc39ac4e5650c28f0193e509dddb5f9))
+
 ## [0.15.3](https://github.com/rambaarde/create-ai-memory/compare/v0.15.2...v0.15.3) (2026-09-19)
 
 
