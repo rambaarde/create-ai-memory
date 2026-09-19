@@ -269,6 +269,9 @@ function handle(req) {
   if (id === undefined) return;
 
   if (method === 'initialize') {
+    // Initialize is the GUI equivalent of a CLI launcher: create the globalized
+    // session log even if the model never remembers to call a tool first.
+    zsh(`ai-context ${q(GUI_PROJECT)} >/dev/null && print -r -- primed`);
     return send({
       jsonrpc: '2.0',
       id,

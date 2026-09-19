@@ -1,5 +1,72 @@
 # Changelog
 
+## [0.15.3](https://github.com/rambaarde/create-ai-memory/compare/v0.15.2...v0.15.3) (2026-09-19)
+
+
+### Bug Fixes
+
+* **mcp:** globalize GUI session logs ([e684110](https://github.com/rambaarde/create-ai-memory/commit/e68411065356393b7384a76ba24a1dc8294d5094))
+
+## [0.15.2](https://github.com/rambaarde/create-ai-memory/compare/v0.15.1...v0.15.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* **mcp:** prime GUI clients with global standards ([6069e47](https://github.com/rambaarde/create-ai-memory/commit/6069e4760b22a25ce483cbea708988ba03704ac6))
+* **mcp:** prime GUI clients with global standards ([8510d23](https://github.com/rambaarde/create-ai-memory/commit/8510d237cb9af853a1b4eb7cb62e109efed9efa6))
+* **mcp:** prime GUI clients with global standards ([e540788](https://github.com/rambaarde/create-ai-memory/commit/e540788c52d21baa060a54f4b40074b46728b911))
+
+## [0.15.1](https://github.com/rambaarde/create-ai-memory/compare/v0.15.0...v0.15.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **mcp:** preserve full GUI memory context ([cc175e2](https://github.com/rambaarde/create-ai-memory/commit/cc175e24bde3579383df00a9f0836e234beef99f))
+* **mcp:** preserve full GUI memory context ([93c176c](https://github.com/rambaarde/create-ai-memory/commit/93c176cf32d34ef426cd2eb85093e6af7ffac667))
+* **session:** preserve notes across same-second context reads ([895ead9](https://github.com/rambaarde/create-ai-memory/commit/895ead9308e1c7fc040da0c35db49c3a557818bd))
+
+## [0.15.0](https://github.com/rambaarde/create-ai-memory/compare/v0.14.7...v0.15.0) (2026-09-14)
+
+
+### Features
+
+* ai-mem-ingest — land distilled transcript notes in the vault ([79cae10](https://github.com/rambaarde/create-ai-memory/commit/79cae1033f93202d9b7555d21e11a5cb5f478fbb))
+* ai-mem-ingest — land distilled transcript notes in the vault ([6697680](https://github.com/rambaarde/create-ai-memory/commit/6697680f18757c2dfaa383bc6473cf2c00933191))
+* **ingest:** add ai-mem-ingest for distilled external artifacts ([ef4206b](https://github.com/rambaarde/create-ai-memory/commit/ef4206b8309f8a1ceaa87f1f4d6bf4a2095e42c5))
+* launch Antigravity (agy) with vault context ([d0abf81](https://github.com/rambaarde/create-ai-memory/commit/d0abf811f8d881f8eb9aa3435c011ad50759c825))
+* launch Antigravity (agy) with vault context ([e87ea72](https://github.com/rambaarde/create-ai-memory/commit/e87ea722a2e52a38bf8bf0b1f9ff275ae66b8da1))
+* **search:** rank a lesson by how often it was recalled, not only its date ([155013f](https://github.com/rambaarde/create-ai-memory/commit/155013ff0872536f692d503e6d8c3e282ea91457))
+* **search:** rank lessons by reinforcement, not only date ([f176a37](https://github.com/rambaarde/create-ai-memory/commit/f176a37da3c956fcb6c396c44aa6e13e3a64e381))
+* **search:** rank lessons by reinforcement; fix Linux test portability ([160c436](https://github.com/rambaarde/create-ai-memory/commit/160c436fdf0606fc3b01638a99cfb3769c3ea610))
+* **serve:** surface dangling wikilinks in the graph view ([5044c67](https://github.com/rambaarde/create-ai-memory/commit/5044c6762fbe04a7936204f31f57741f517dfc53))
+* **serve:** surface dangling wikilinks in the graph view ([1708bac](https://github.com/rambaarde/create-ai-memory/commit/1708bac79e07504dafee6a4d6352d4e4ca521766))
+* **serve:** surface dangling wikilinks in the graph view ([d5827e9](https://github.com/rambaarde/create-ai-memory/commit/d5827e92547c4882d19dbb18fbcb9beeaf56825a))
+* **sleep:** add ai-mem-sleep, the vault's bedtime maintenance pass ([ee6c10f](https://github.com/rambaarde/create-ai-memory/commit/ee6c10f7354340427b953bffb060c14b6df1d03f))
+* **sleep:** add ai-mem-sleep, the vault's bedtime maintenance pass ([84d8435](https://github.com/rambaarde/create-ai-memory/commit/84d8435601c3199c16d2b16783c1232ab358f339))
+* **sleep:** ai-mem-sleep bedtime maintenance pass ([cb57a62](https://github.com/rambaarde/create-ai-memory/commit/cb57a62d1a701e3df5de7265efe0093f735e4039))
+* **sleep:** schedule the bedtime pass, and lint dangling wikilinks ([815b922](https://github.com/rambaarde/create-ai-memory/commit/815b922f68f316e7c3b2f36d084ec5bd26397cb1))
+* **sleep:** schedule the bedtime pass, and lint dangling wikilinks ([b23bc63](https://github.com/rambaarde/create-ai-memory/commit/b23bc6353ba571d565e8da00a2eeb2f951c938a3))
+* **sleep:** scheduled bedtime pass + dangling-wikilink lint ([8ed8799](https://github.com/rambaarde/create-ai-memory/commit/8ed8799db46b3b2bd7cee591abadbe4868eed673))
+
+
+### Bug Fixes
+
+* bound what an inlined note contributes to the launch prompt ([39e477f](https://github.com/rambaarde/create-ai-memory/commit/39e477fcf2252d3b44ba5a0e1dd24f44815e704d))
+* bound what an inlined note contributes to the launch prompt ([be62bec](https://github.com/rambaarde/create-ai-memory/commit/be62bec8182978881eeb9ee109bf12d2eed8d9d4))
+* **hooks:** keep notes written below the auto session block ([f4b6f0c](https://github.com/rambaarde/create-ai-memory/commit/f4b6f0c424f83d7a3cd76ba6676679c8a27a8f4c))
+* **session:** skip unfilled prior logs and protect session notes ([ff9aa9e](https://github.com/rambaarde/create-ai-memory/commit/ff9aa9eea2a893fd47874182e845581a9222ae5b))
+* **session:** skip unfilled prior logs and stale-shell hook writes ([b1526ca](https://github.com/rambaarde/create-ai-memory/commit/b1526cac5ddb52bba30561517a40b0a383d65c42))
+* **session:** skip unfilled prior logs and stale-shell hook writes ([003f96b](https://github.com/rambaarde/create-ai-memory/commit/003f96b4a0ca4e2e6441e6a8277d0d61a87c0041))
+* **test:** use perl -i so the filled-note assertion passes on Linux ([abb868f](https://github.com/rambaarde/create-ai-memory/commit/abb868fba42797b83426002ba64e6be29e9d2e29))
+* **test:** use perl -i so the filled-note assertion passes on Linux ([8cdbc8b](https://github.com/rambaarde/create-ai-memory/commit/8cdbc8b9c8986677c3dfa27d938d908528cde85b))
+
+
+### Performance Improvements
+
+* stop /ups spawning interactive subshells; export AI_MEM_HOME ([f714728](https://github.com/rambaarde/create-ai-memory/commit/f714728b805971831fa2fefc3bbc812b2f895a24))
+* stop /ups spawning interactive subshells; export AI_MEM_HOME ([b0a4b09](https://github.com/rambaarde/create-ai-memory/commit/b0a4b09fc6695ccfcaa6e71b51a61b8887995674))
+* stop /ups spawning interactive subshells; export AI_MEM_HOME ([4d22ef9](https://github.com/rambaarde/create-ai-memory/commit/4d22ef99c9dd8aa0bd6c3099b533989d77177e17))
+
 ## [0.14.7](https://github.com/rambaarde/create-ai-memory/compare/v0.14.6...v0.14.7) (2026-09-01)
 
 

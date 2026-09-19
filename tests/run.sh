@@ -979,6 +979,15 @@ MCP_IN="$(mktemp)"
   print -r -- '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"written by a GUI client"}}}'
   print -r -- '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
 } > "$MCP_IN"
+INITVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$INITVAULT" "$REPO_ROOT/install.sh" >/dev/null
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+  | AI_MEM_ROOT="$INITVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" >/dev/null 2>&1
+if find "$INITVAULT/_globalize_mem/_session_logs" -maxdepth 1 -type f -name '_globalize_mem-*.md' 2>/dev/null | grep -q .; then
+  ok "MCP initialize creates the GUI global session log before any tool call"
+else
+  nok "MCP initialize creates the GUI global session log before any tool call"
+fi
 
 MCP_OUT="$(mktemp)"
 # Run from inside a git repo so project resolution has something to resolve.
