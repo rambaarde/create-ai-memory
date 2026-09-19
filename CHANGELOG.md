@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.3](https://github.com/rambaarde/create-ai-memory/compare/v0.15.2...v0.15.3) (2026-09-19)
+
+
+### Bug Fixes
+
+* **mcp:** globalize GUI session logs ([e684110](https://github.com/rambaarde/create-ai-memory/commit/e68411065356393b7384a76ba24a1dc8294d5094))
+
 ## [0.15.2](https://github.com/rambaarde/create-ai-memory/compare/v0.15.1...v0.15.2) (2026-09-18)
 
 
