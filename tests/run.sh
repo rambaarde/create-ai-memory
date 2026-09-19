@@ -1026,17 +1026,19 @@ is  "$(mcpfield 10 isError)" "true" "MCP add_lesson refuses a call missing probl
 MCP_NOTE_PATH="$(mcpfield 7 text)"
 MCP_NOTE_PATH="${MCP_NOTE_PATH#Appended to }"
 MCPVAULT_REAL="$(cd "$MCPVAULT" && pwd -P)"
-if [[ "$MCP_NOTE_PATH" == "$MCPVAULT_REAL/_session_logs/"* ]] &&
+if [[ "$MCP_NOTE_PATH" == "$MCPVAULT_REAL/_globalize_mem/_session_logs/_globalize_mem-"* ]] &&
    [[ -f "$MCP_NOTE_PATH" ]] && grep -q "written by a GUI client" "$MCP_NOTE_PATH" 2>/dev/null; then
-  ok "MCP add_note lands in the session log on disk"
+  ok "MCP add_note lands in the GUI global session log on disk"
 else
-  nok "MCP add_note lands in the session log on disk"
+  nok "MCP add_note lands in the GUI global session log on disk"
 fi
 exists "$MCPVAULT/_lessons/mcp-probe-lesson.md" "MCP add_lesson creates the cross-project lesson file"
+has "$(<"$MCPVAULT/_lessons/mcp-probe-lesson.md")" "[[_globalize_mem]]" "MCP add_lesson tags the GUI global project"
 # The round trip is the point: what a GUI writes must be findable afterwards.
 has "$(mcpfield 11 text)" "match(es)" "what a GUI writes is immediately findable by search"
 has "$(mcpfield 12 text)" "GUI_PROFILE_SENTINEL" "GUI MCP context includes the complete global profile"
 has "$(mcpfield 12 text)" "GUI_STANDARDS_SENTINEL" "GUI MCP context includes standards additions"
+has "$(mcpfield 12 text)" "_globalize_mem/_session_logs/_globalize_mem-" "GUI MCP context defaults to the top-level GUI global session log"
 hasnt "$(mcpfield 12 text)" "truncated at" "GUI MCP context does not truncate engineering standards"
 
 # instructions is how a GUI learns the vault exists at all. Without it a model
