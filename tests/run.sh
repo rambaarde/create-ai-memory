@@ -984,6 +984,14 @@ AI_MEM_ROOT="$INITVAULT" "$REPO_ROOT/install.sh" >/dev/null
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
   | AI_MEM_ROOT="$INITVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" >/dev/null 2>&1
 if find "$INITVAULT/_globalize_mem/_session_logs" -maxdepth 1 -type f -name '_globalize_mem-*.md' 2>/dev/null | grep -q .; then
+if [[ ! -e "$INITVAULT/_projects/_globalize_mem.md" ]] &&
+   GLOBAL_LOG="$(find "$INITVAULT/_globalize_mem/_session_logs" -maxdepth 1 -type f -name '_globalize_mem-*.md' -print -quit 2>/dev/null)" &&
+   grep -q '^type: ai-global-session$' "$GLOBAL_LOG" 2>/dev/null &&
+   ! grep -qE 'Insert Repo Root|Session Outcome|project:' "$GLOBAL_LOG" 2>/dev/null; then
+  ok "GUI global sessions stay compact and do not create a project note"
+else
+  nok "GUI global sessions stay compact and do not create a project note"
+fi
   ok "MCP initialize creates the GUI global session log before any tool call"
 else
   nok "MCP initialize creates the GUI global session log before any tool call"
@@ -1069,6 +1077,25 @@ if node -e '
   ok "MCP initialize primes GUI clients with global profile and standards"
 else
   nok "MCP initialize primes GUI clients with global profile and standards"
+fi
+if node -e '
+  const ls=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse);
+  const i=ls.find(x=>x.id==1).result.instructions || "";
+  process.exit(/^HARD RULES/.test(i) && /Call get_context before/.test(i) && /detailed body/.test(i) ? 0 : 1);
+' "$MCP_OUT"; then
+  ok "MCP puts the context gate and commit-body rule before the full standards payload"
+else
+  nok "MCP puts the context gate and commit-body rule before the full standards payload"
+fi
+if node -e '
+  const ls=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse);
+  const tools=ls.find(x=>x.id==2).result.tools || [];
+  const t=tools.find(x=>x.name==="get_context");
+  process.exit(t && /^REQUIRED FIRST ACTION/.test(t.description) ? 0 : 1);
+' "$MCP_OUT"; then
+  ok "MCP marks get_context as the required first action"
+else
+  nok "MCP marks get_context as the required first action"
 fi
 
 # --- Open Knowledge Format: every note declares a `type` -----------------------
