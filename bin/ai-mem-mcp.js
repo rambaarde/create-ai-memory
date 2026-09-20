@@ -64,6 +64,7 @@ function zsh(snippet) {
       AI_MEM_NOTE_MAX_CHARS: process.env.AI_MEM_NOTE_MAX_CHARS ?? '0',
       AI_MEM_FORCE_PROJECT: GUI_PROJECT,
       AI_MEM_GLOBALIZE_ROOT: GUI_ROOT,
+      AI_MEM_GLOBAL_SESSION: '1',
     },
     maxBuffer: 8 * 1024 * 1024,
   });
@@ -122,36 +123,33 @@ function insideVault(p) {
  * before the first turn.
  *
  * This is what makes a GUI behave like a launcher. In a terminal the vault is
- * pushed into the agent's opening prompt; over MCP nothing is pushed, and a
- * model with no reason to suspect a memory exists will simply never call a
- * tool. Saying so once, up front, is the whole difference.
+ * pushed into the agent's opening prompt; over MCP the client must receive a
+ * clear context gate before it can act.
  *
- * Kept deliberately short and free of bulk. The obvious move is to inline the
- * profile, standards and lesson list here so a GUI gets everything the
- * launcher injects -- but instructions are paid on every connection whether
- * used or not, and clients are free to truncate or ignore the field. A cheap
- * nudge plus one get_context call is both smaller and more robust than a
- * large block that may be silently dropped.
+ * Put the non-negotiable rules first because some GUI clients cap or summarize
+ * long instruction fields. Keep the full profile and standards after that so
+ * clients that preserve the payload have the same source material as CLI runs.
  */
 const INSTRUCTIONS = [
+  'HARD RULES — follow these before doing work:',
+  '1. Treat _Global_Profile.md and _Standards.md as active instructions, not optional reference material.',
+  '2. Call get_context before answering, editing files, using external tools, or creating a commit. If it fails, stop and report the failure.',
+  '3. Call search_memory before solving a non-trivial problem or retrying a blocker.',
+  '4. Commit messages require Conventional Commits plus a blank line and a detailed body with a summary and concrete change bullets. Never create a title-only commit.',
+  '',
   "This is the user's persistent memory across every AI tool they use: past sessions, project decisions, and lessons learned the hard way.",
   '',
-  'These global profile and standards are active instructions for this session:',
+  'The full global profile and standards follow:',
   '--- _Global_Profile.md ---',
   readVaultNote('_Global_Profile.md'),
   '--- _Standards.md ---',
   readVaultNote('_Standards.md'),
   '',
-  'Before answering anything about their work, call get_context. It returns their profile, standards, the current project note, and what the last session concluded.',
-  'Before solving a problem, call search_memory -- they may have solved it already, and repeating a solved mistake is the failure this vault exists to prevent. Search broadly first; too specific a first query is the usual way to miss something.',
-  'When you hit a blocker -- an error you do not understand, an unclear failure, or a second failed attempt at the same thing -- search again before guessing. Lessons rank above session logs, so a hit under _lessons/ is the recorded fix.',
-  'Search ONE distinctive word, not a sentence. Matching is literal substring: a whole error line finds nothing, and a bare tool name returns hundreds of irrelevant lines. Pick the most unusual word in the symptom and try two or three separately.',
+  'get_context returns the loaded profile, standards, project context, and latest session digest. Its successful result is the context gate for this session.',
+  'search_memory may contain a prior solution. Search broadly first; use one distinctive word, not a whole sentence.',
   '',
-  'Write back. A session that only reads leaves nothing behind, and the next one starts cold:',
-  '- add_note for what happened, decided, or broke during this session.',
-  '- add_lesson for something worth recalling in a DIFFERENT project later. Not project trivia -- the transferable part.',
-  '',
-  'If they ask to see, open or browse their memory rather than search it, call open_graph.',
+  'Write back with add_note for decisions, blockers, and next steps. Use add_lesson only for reusable knowledge that matters in a different project.',
+  'If the user asks to see or browse memory, call open_graph.',
 ].join('\n');
 
 // Descriptions stay terse on purpose. Every schema below is re-sent on each
@@ -173,7 +171,7 @@ const TOOLS = [
   },
   {
     name: 'get_context',
-    description: 'The user\'s profile, standards, current project note, last session digest, and known lesson topics.',
+    description: 'REQUIRED FIRST ACTION. Returns the user\'s active profile, standards, current project note, latest session digest, and lesson topics.',
     inputSchema: {
       type: 'object',
       properties: { project: { type: 'string', description: 'Optional project. Defaults to the GUI global memory project.' } },

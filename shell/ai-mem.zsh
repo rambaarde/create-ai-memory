@@ -453,7 +453,16 @@ __ai_mem_prepare_session() {
 
     __ai_mem_ensure_vault || return 1
 
-    local project_note="$AI_MEM_PROJECT_DIR/${project_name}.md"
+    # GUI/MCP memory has no repository project. Keep its session records
+    # lightweight instead of copying repository-oriented templates.
+    local global_session=0
+    [[ "${AI_MEM_GLOBAL_SESSION:-}" == "1" ]] && global_session=1
+
+    local project_note=""
+    if (( ! global_session )); then
+        project_note="$AI_MEM_PROJECT_DIR/${project_name}.md"
+    fi
+
     local project_session_dir
     project_session_dir="$(__ai_mem_project_session_dir "$project_name")"
     local previous_session_note=""
@@ -461,12 +470,14 @@ __ai_mem_prepare_session() {
     local session_stamp="$(date +%Y-%m-%d_%H-%M-%S)"
     local session_note="$project_session_dir/${project_name}-${session_stamp}.md"
 
-    __ai_mem_guard "$project_note" || return 1
+    if (( ! global_session )); then
+        __ai_mem_guard "$project_note" || return 1
+    fi
     __ai_mem_guard "$session_note" || return 1
 
     mkdir -p "$AI_MEM_PROJECT_DIR" "$AI_MEM_SESSION_DIR" "$project_session_dir"
 
-    if [[ ! -f "$project_note" ]]; then
+    if (( ! global_session )) && [[ ! -f "$project_note" ]]; then
         PROJECT_NAME="$project_name" perl -0pe 's/\[Insert Project Name\]/$ENV{PROJECT_NAME}/g' \
             "$AI_MEM_PROJECT_DIR/_project_template.md" > "$project_note"
     fi
@@ -491,8 +502,13 @@ __ai_mem_prepare_session() {
     # Context reads can follow a GUI write in the same second. Reusing an
     # existing timestamped note preserves Live Notes and any other append.
     if [[ ! -f "$session_note" ]]; then
-        SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" PREV_LINK="$prev_link" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g; s/\{\{previous_session_link\}\}/$ENV{PREV_LINK}/g' \
-            "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"
+        if (( global_session )); then
+            local session_date="$(date +%Y-%m-%d)"
+            print -rl -- "---" "type: ai-global-session" "date: $session_date" "previous: \"$prev_link\"" "---" "" "# Global Session Notes" > "$session_note"
+        else
+            SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" PREV_LINK="$prev_link" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g; s/\{\{previous_session_link\}\}/$ENV{PREV_LINK}/g' \
+                "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"
+        fi
     fi
 
     export AI_MEM_ACTIVE_PROJECT="$project_name"
@@ -606,6 +622,8 @@ __ai_mem_context_prompt() {
     if [[ -f "$project_note" ]] && grep -q '\[What problem this repository solves\]' "$project_note" 2>/dev/null; then
         project_state=" -- NOT YET FILLED IN: it is still the blank template, so it holds no context. Read the repo (README, package manifest, AGENTS.md/CLAUDE.md, recent git log) and fill it in early in this session; every future session on this repo starts from it."
     fi
+    local project_label="$project_note"
+    [[ -n "$project_label" ]] || project_label="none (GUI/MCP global memory; no repository context)"
 
     cat <<EOF
 Read these notes before doing anything else:
@@ -615,7 +633,7 @@ $(__ai_mem_note_contents "$AI_MEM_GLOBAL")
 - Standards:
 $(__ai_mem_note_contents "$AI_MEM_STANDARDS")
 
-- Project context: $project_note$project_state
+- Project context: $project_label$project_state
 $previous_session_block
 - Active session log: $session_note
 $(__ai_mem_lesson_index)
