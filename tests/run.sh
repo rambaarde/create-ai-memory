@@ -836,10 +836,11 @@ AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 # These assert the shape it serves, and that the note route cannot be talked
 # into reading outside the vault.
 GVAULT="$(mktemp -d)/_Ai_Memory"
-mkdir -p "$GVAULT/_projects" "$GVAULT/_lessons"
+mkdir -p "$GVAULT/_projects" "$GVAULT/_lessons" "$GVAULT/_archive"
 print -rl -- "---" "type: ai-project-context" "tags: [alpha, beta]" "---" "# Demo Project" > "$GVAULT/_projects/demo.md"
 print -rl -- "---" "type: ai-lesson" "---" "# A Lesson" "seen on [[demo]]" > "$GVAULT/_lessons/lesson-one.md"
 print -rl -- "---" "type: ai-lesson" "---" "# Orphan" "points at [[nothing-here]]" > "$GVAULT/_lessons/orphan.md"
+print -rl -- "---" "type: ai-session-log" "---" "# Archived Template" > "$GVAULT/_archive/old.md"
 
 GPORT=7793
 AI_MEM_ROOT="$GVAULT" node "$REPO_ROOT/bin/ai-mem-serve.js" "$GPORT" --no-open >/dev/null 2>&1 &
@@ -863,7 +864,7 @@ gfield() { print -r -- "$GJSON" | node -e '
   if(q==="dangle_demo")   return process.stdout.write(String((g.nodes.find(n=>n.id.endsWith("demo.md"))||{}).dangling||0));
 })' "$1"; }
 
-is "$(gfield nodes)" "3" "graph server returns every note as a node"
+is "$(gfield nodes)" "3" "graph server returns active notes, excluding archives"
 # Two lessons link out but only one target exists. OKF requires consumers to
 # tolerate links that do not resolve, so the dangling one is dropped rather
 # than drawn to a node that is not there.
