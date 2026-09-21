@@ -41,7 +41,7 @@ const NO_OPEN = ARGS.includes('--no-open');
 const PORT = Number(ARGS.find((a) => /^\d+$/.test(a)) || process.env.AI_MEM_PORT || 7777);
 const VIEWER = join(__dirname, '..', 'web', 'viewer.html');
 
-/** Recursively collect every .md file in the vault, skipping dotfiles and templates. */
+/** Recursively collect active .md files, skipping dotfiles, archives, and templates. */
 function walk(dir, out = []) {
   let entries;
   try {
@@ -50,7 +50,7 @@ function walk(dir, out = []) {
     return out;
   }
   for (const e of entries) {
-    if (e.name.startsWith('.')) continue;
+    if (e.name.startsWith('.') || e.name === '_archive') continue;
     const p = join(dir, e.name);
     if (e.isDirectory()) walk(p, out);
     else if (extname(e.name) === '.md' && !e.name.endsWith('_template.md')) out.push(p);
