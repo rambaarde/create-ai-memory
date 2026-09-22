@@ -47,6 +47,18 @@ if [[ -d "$AI_MEM_ROOT" ]]; then
     AI_MEM_ROOT="$(cd "$AI_MEM_ROOT" && pwd -P)"
 fi
 export AI_MEM_ROOT
+# Paths derived from AI_MEM_ROOT. Every function that reads them calls this
+# first rather than trusting the exports made at source time: a shell can carry
+# the functions without the exports (Claude Code's Bash tool replays a snapshot
+# of functions, and only inherited variables survive), and then AI_MEM_SESSION_DIR
+# is empty -- ai-mem-sleep reported "no session logs at  -- nothing to do".
+# Only empty ones are filled, so a caller that points one of them elsewhere keeps it.
+__ai_mem_paths() {
+    export AI_MEM_GLOBAL="${AI_MEM_GLOBAL:-$AI_MEM_ROOT/_Global_Profile.md}"
+    export AI_MEM_STANDARDS="${AI_MEM_STANDARDS:-$AI_MEM_ROOT/_Standards.md}"
+    export AI_MEM_PROJECT_DIR="${AI_MEM_PROJECT_DIR:-$AI_MEM_ROOT/_projects}"
+    export AI_MEM_SESSION_DIR="${AI_MEM_SESSION_DIR:-$AI_MEM_ROOT/_session_logs}"
+}
 export AI_MEM_GLOBAL="$AI_MEM_ROOT/_Global_Profile.md"
 export AI_MEM_STANDARDS="$AI_MEM_ROOT/_Standards.md"
 export AI_MEM_PROJECT_DIR="$AI_MEM_ROOT/_projects"
@@ -299,6 +311,7 @@ __ai_mem_resolve_project() {
 }
 
 __ai_mem_project_session_dir() {
+    __ai_mem_paths
     local project_name="${1:-}"
     if [[ -z "$project_name" ]]; then
         project_name="$(__ai_mem_resolve_project)"
@@ -352,6 +365,7 @@ __ai_mem_graphify_context() {
 # Returns the newest saved session log for the current project.
 # The active run gets a fresh log, so this only feeds carryover context.
 __ai_mem_latest_session_log() {
+    __ai_mem_paths
     local project_name="${1:-}"
     if [[ -z "$project_name" ]]; then
         project_name="$(__ai_mem_resolve_project)"
@@ -391,6 +405,7 @@ __ai_mem_latest_session_log() {
 # Idempotent and additive: it never overwrites a file the user already has, so a
 # plugin-manager install (source only, no install.sh) still gets a working vault.
 __ai_mem_ensure_vault() {
+    __ai_mem_paths
     [[ -d "$AI_MEM_TEMPLATE_SRC" ]] || return 0
     mkdir -p "$AI_MEM_PROJECT_DIR" "$AI_MEM_SESSION_DIR" "$AI_MEM_ROOT/_lessons"
     local rel
@@ -446,6 +461,7 @@ __ai_mem_ensure_vault() {
 }
 
 __ai_mem_prepare_session() {
+    __ai_mem_paths
     local project_name="${1:-}"
     if [[ -z "$project_name" ]]; then
         project_name="$(__ai_mem_resolve_project)"
@@ -580,6 +596,7 @@ __ai_mem_lesson_index() {
 }
 
 __ai_mem_context_prompt() {
+    __ai_mem_paths
     local project_note="${1:-}"
     local previous_session_note="${2:-}"
     local session_note="${3:-}"
@@ -651,6 +668,7 @@ EOF
 
 # Mark the current shell as having loaded AI vault context for the active repo.
 __ai_mem_mark_commit_ready() {
+    __ai_mem_paths
     local project_name="${1:-}"
     local source="${2:-ai-context}"
     local ready_dir="$AI_MEM_SESSION_DIR/.context-ready"
@@ -699,6 +717,7 @@ __ai_mem_export_active() {
 }
 
 ai-start() {
+    __ai_mem_paths
     local project_name="${1:-}"
     shift || true
 
@@ -882,6 +901,7 @@ __ai_mem_current_project() {
 }
 
 __ai_mem_today_session_log() {
+    __ai_mem_paths
     local project_name="${1:-}"
     if [[ -z "$project_name" ]]; then
         project_name="$(__ai_mem_resolve_project)"
@@ -1144,6 +1164,7 @@ ai-mem-ingest() {
 # "isolated dots in Graph View" class of problem before you have to notice it
 # by eye.
 ai-mem-lint() {
+    __ai_mem_paths
     local fix=0
     [[ "${1:-}" == "--fix" ]] && fix=1
     local issues=0 f label target found
@@ -1309,6 +1330,7 @@ ai-mem-lint() {
 #   AI_MEM_SLEEP_DAYS        archive logs older than this many days   (default 90)
 #   AI_MEM_SLEEP_CONSOLIDATE flag a project with this many hot logs   (default 8)
 ai-mem-sleep() {
+    __ai_mem_paths
     local apply=0
     [[ "${1:-}" == "--apply" ]] && apply=1
 
@@ -1507,6 +1529,7 @@ ai-mem-sleep-schedule() {
 # because a flag only helps if whoever's calling this remembers it exists,
 # and the whole point is not depending on that.
 ai-mem-search() {
+    __ai_mem_paths
     local term="${1:-}"
     local project="${2:-}"
     if [[ -z "$term" ]]; then
