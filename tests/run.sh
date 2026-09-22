@@ -21,8 +21,8 @@ integer PASS=0 FAIL=0
 typeset -ga SERVERS=()
 cleanup_servers() { local p; for p in $SERVERS; do kill $p 2>/dev/null; done }
 trap cleanup_servers EXIT INT TERM
-ok()  { print -r -- "ok   - $1"; (( PASS++ )); }
-nok() { print -r -- "NOT OK - $1"; (( FAIL++ )); }
+ok()  { print -r -- "ok   - $1"; (( ++PASS )); }
+nok() { print -r -- "NOT OK - $1"; (( ++FAIL )); }
 is()       { [[ "$1" == "$2" ]] && ok "$3" || nok "$3 (got [$1] want [$2])"; }
 has()      { [[ "$1" == *"$2"* ]] && ok "$3" || nok "$3 (missing [$2])"; }
 hasnt()    { [[ "$1" != *"$2"* ]] && ok "$3" || nok "$3 (unexpected [$2])"; }
@@ -36,8 +36,14 @@ exists()   { [[ -e "$1" ]] && ok "$2" || nok "$2 (missing $1)"; }
 unset AI_MEM_ACTIVE_SESSION_LOG AI_MEM_PREVIOUS_SESSION_LOG AI_MEM_ACTIVE_PROJECT \
       AI_MEM_CONTEXT_TOKEN AI_MEM_CONTEXT_READY 2>/dev/null || true
 
+# install.sh appends its setup lines to ${ZDOTDIR:-$HOME}/.zshrc, and a piped
+# run answers yes. Without this, a run from any checkout other than the one the
+# user's rc already sources wrote a temp vault into their real ~/.zshrc -- and
+# every new shell after that logged to a throwaway vault. It happened.
+export ZDOTDIR="$(mktemp -d)"
 export AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory"
 "$REPO_ROOT/install.sh" >/dev/null
+has "$(<"$ZDOTDIR/.zshrc")" "$AI_MEM_ROOT" "install.sh in the suite writes to a throwaway rc, never the user's real ~/.zshrc"
 
 # Register a fake agent + a fake skill BEFORE sourcing so the launcher loop and
 # the picker pick them up. The adapter just records the prompt it was handed.
@@ -608,6 +614,10 @@ has "$SLEEP_DRY" "2 log(s) to archive"  "ai-mem-sleep dry run reports the archiv
 has "$SLEEP_DRY" "Re-run with --apply"  "ai-mem-sleep dry run moves nothing"
 is "$(find "$AI_MEM_SESSION_DIR/sleepproj" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "7" \
   "ai-mem-sleep dry run leaves every log in place"
+# A shell that carries the functions but not the derived exports (Claude Code's
+# Bash tool snapshot) must still find the logs from AI_MEM_ROOT alone.
+has "$(unset AI_MEM_SESSION_DIR; AI_MEM_SLEEP_KEEP=5 ai-mem-sleep 2>/dev/null)" "2 log(s) to archive" \
+  "ai-mem-sleep derives the session dir from AI_MEM_ROOT when AI_MEM_SESSION_DIR is unset"
 
 AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
 is "$(find "$AI_MEM_SESSION_DIR/sleepproj" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "5" \
