@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run the canonical zsh implementation from non-interactive agent shells.
+# OMP and similar harnesses do not inherit interactive zsh functions.
+set -e
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+MODULE="$SCRIPT_DIR/../shell/ai-mem.zsh"
+
+exec zsh -f -c 'source "$1"; shift; ai-mem-search "$@"' \
+    ai-mem-search "$MODULE" "$@"

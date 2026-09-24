@@ -1,8 +1,8 @@
 # === AI CLI + Obsidian memory ===
 # Portable, agent-agnostic session memory. Source this from ~/.zshrc after
 # exporting AI_MEM_ROOT to point at your vault. Zsh-only (uses print -r, ${(s)},
-# and associative arrays). Add a new agent by defining __ai_adapter_<name> in adapters.zsh and
-# listing it in AI_MEM_AGENTS; a matching <name>-start function is generated.
+# and associative arrays). Add a new harness by defining __ai_adapter_<name> in adapters.zsh and
+# listing it in AI_MEM_HARNESSES; a matching <name>-start function is generated.
 #
 # Private helpers are named __ai_* with TWO leading underscores, deliberately.
 # Claude Code snapshots the interactive shell and replays that snapshot for
@@ -327,41 +327,6 @@ __ai_mem_project_session_dir() {
     print -r -- "$AI_MEM_SESSION_DIR/$project_name"
 }
 
-__ai_mem_graphify_repo_root() {
-    local git_root=""
-    git_root="$(git rev-parse --show-toplevel 2>/dev/null)" || true
-    if [[ -n "$git_root" ]]; then
-        print -r -- "$git_root"
-    else
-        print -r -- "$PWD"
-    fi
-}
-
-__ai_mem_graphify_context() {
-    local repo_root="$(__ai_mem_graphify_repo_root)"
-    local graph_root="$repo_root/graphify-out"
-    local graph_json="$graph_root/graph.json"
-    local graph_report="$graph_root/GRAPH_REPORT.md"
-    local graph_wiki="$graph_root/wiki/index.md"
-
-    if [[ ! -f "$graph_json" ]]; then
-        return 0
-    fi
-
-    export AI_GRAPHIFY_ROOT="$graph_root"
-    export AI_GRAPHIFY_GRAPH_JSON="$graph_json"
-
-    printf '%s\n' \
-        "Graphify context:" \
-        "- Knowledge graph available at: $graph_root" \
-        "- Use graphify query/path/explain before raw grep for codebase or architecture questions." \
-        "- Read the graph report for broad overviews: $graph_report"
-
-    if [[ -f "$graph_wiki" ]]; then
-        printf '%s\n' "- Use the wiki index for broad navigation: $graph_wiki"
-    fi
-}
-
 # Returns the newest saved session log for the current project.
 # The active run gets a fresh log, so this only feeds carryover context.
 __ai_mem_latest_session_log() {
@@ -658,7 +623,7 @@ $(__ai_mem_lesson_index)
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
-For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are zsh functions from the sourced module, so \`command -v\` finds them but \`which\` under bash will not. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
+For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
 When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down; lessons are ranked above session logs in the results, so a hit under \`_lessons/\` is the recorded fix.
 Search ONE distinctive word, not a sentence. Matching is literal substring, so a whole error line ('command not found: sed') finds nothing while 'command not found' finds it, and a bare tool name ('sed', 'git') returns hundreds of irrelevant lines. Pick the most unusual word in the symptom and try two or three of them separately.
 If the user asks to see, open or browse their memory rather than search it, run \`ai-mem-serve\` -- it opens the vault as a graph in their browser, and is safe to run again if it is already up.
@@ -807,9 +772,14 @@ __ai_session_modes_instructions() {
 
 # Start an AI client with the shared memory block and the chosen session mode.
 __ai_session_start() {
-    local launcher="${1:-}"
+    local requested_launcher="${1:-}"
+    local launcher="${AI_MEM_PREFERRED_HARNESS:-$requested_launcher}"
     if (( $# > 0 )); then
         shift
+    fi
+
+    if [[ -n "${AI_MEM_PREFERRED_HARNESS:-}" && "$requested_launcher" != "$launcher" ]]; then
+        echo "ai-memory: $requested_launcher-start is using preferred harness $launcher" >&2
     fi
 
     # Warn (never block) if this shell is running a stale copy. Everything
@@ -828,7 +798,7 @@ __ai_session_start() {
     # session log is created. Cursor is exempt: its adapter falls back to opening
     # the app when the `cursor` CLI is absent.
     if [[ "$launcher" != cursor ]] && ! command -v "$launcher" >/dev/null 2>&1; then
-        echo "ai-memory: '$launcher' CLI not found on PATH. Install it, or drop it from AI_MEM_AGENTS." >&2
+        echo "ai-memory: '$launcher' CLI not found on PATH. Install it, or remove it from AI_MEM_HARNESSES." >&2
         return 1
     fi
 
@@ -840,7 +810,12 @@ __ai_session_start() {
     __ai_mem_export_active "$active_project" "$previous_session_note" "$session_note"
 
     local session_modes mode_block
-    session_modes="$(__ai_session_modes_pick)" || return 1
+    if [[ -n "${AI_MEM_MANUAL_SKILLS:-}" ]]; then
+        # One-off opt-in for skills that should not appear in the startup picker.
+        session_modes="$AI_MEM_MANUAL_SKILLS"
+    else
+        session_modes="$(__ai_session_modes_pick)" || return 1
+    fi
     mode_block="$(__ai_session_modes_instructions "$session_modes")"
 
     # AI_SESSION_MODES carries the chosen skill keys; AI_SESSION_STYLE_LABEL
@@ -851,14 +826,10 @@ __ai_session_start() {
     local memory_prompt
     memory_prompt="$(__ai_mem_context_prompt "$project_note" "$previous_session_note" "$session_note")"
 
-    local graphify_context=""
-    graphify_context="$(__ai_mem_graphify_context)" || return 1
-    if [[ -n "$graphify_context" ]]; then
-        memory_prompt+=$'\n\n'
-        memory_prompt+="$graphify_context"
-    fi
-
-    if [[ -n "$mode_block" ]]; then
+    # OMP receives the selected skill files through its system-prompt channel;
+    # do not duplicate the short picker blocks in its opening user message,
+    # where OMP can mistake names such as "caveman skill" for skill:// refs.
+    if [[ -n "$mode_block" && "$launcher" != omp ]]; then
         memory_prompt+=$'\n\n'
         memory_prompt+="$mode_block"
     fi
@@ -879,12 +850,14 @@ __ai_session_start() {
     "__ai_adapter_$launcher" "$memory_prompt" "$mode_block" "$@"
 }
 
-# Load the agent adapters, then generate a <name>-start launcher for every
-# registered agent that has a matching adapter. Users extend by appending to
-# AI_MEM_AGENTS (space-separated) and defining __ai_adapter_<name>.
+# Load the harness adapters, then generate a <name>-start launcher for every
+# registered harness that has a matching adapter. AI_MEM_HARNESSES is preferred;
+# AI_MEM_AGENTS remains a compatibility alias for existing installs.
 source "$AI_MEM_HOME/adapters.zsh"
-: "${AI_MEM_AGENTS:=claude codex agy gemini cursor opencode}"
-for _ai_agent in ${(z)AI_MEM_AGENTS}; do
+: "${AI_MEM_HARNESSES:=${AI_MEM_AGENTS:-claude codex agy gemini cursor opencode omp}}"
+export AI_MEM_HARNESSES
+export AI_MEM_AGENTS="$AI_MEM_HARNESSES"
+for _ai_agent in ${(z)AI_MEM_HARNESSES}; do
     if typeset -f "__ai_adapter_$_ai_agent" >/dev/null; then
         # A same-named alias (e.g. from another plugin) makes zsh refuse to
         # `eval` a function definition of that name at all -- "defining
