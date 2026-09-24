@@ -100,13 +100,32 @@ __ai_adapter_opencode() {
 # channel so they have higher authority than ordinary prompt text. Do not use
 # -p/--print here; that is one-shot mode.
 __ai_omp_model_selector() {
+    local requested="${AI_MEM_REQUESTED_LAUNCHER:-omp}"
     local configured="${AI_MEM_OMP_MODEL:-}"
+    local mapped="${AI_MEM_OMP_MODELS[$requested]:-}"
+    if [[ -n "$mapped" ]]; then
+        print -r -- "$mapped"
+        return 0
+    fi
     if [[ -n "$configured" ]]; then
         print -r -- "$configured"
         return 0
     fi
     if [[ -r "$HOME/.omp/agent/config.yml" ]]; then
         sed -n 's/^[[:space:]]*default:[[:space:]]*//p' "$HOME/.omp/agent/config.yml" | sed -n '1p'
+    fi
+}
+
+__ai_omp_provider_args() {
+    local requested="${AI_MEM_REQUESTED_LAUNCHER:-omp}"
+    [[ "$requested" == omp ]] && return 0
+    local provider="${AI_MEM_OMP_PROVIDERS[$requested]:-$requested}"
+    local model="${AI_MEM_OMP_MODELS[$requested]:-}"
+    print -r -- "--provider"
+    print -r -- "$provider"
+    if [[ -n "$model" ]]; then
+        print -r -- "--model"
+        print -r -- "$model"
     fi
 }
 
@@ -156,7 +175,8 @@ __ai_omp_skill_instructions() {
 __ai_adapter_omp() {
     local memory_prompt="$1" mode_block="$2"
     shift 2 2>/dev/null || true
-    local system_prompt model_selector arg previous_arg="" loaded_skills=""
+    local system_prompt model_selector arg previous_arg="" loaded_skills="" provider_args=()
+    provider_args=( ${(f)"$(__ai_omp_provider_args)"} )
     model_selector="$(__ai_omp_model_selector)"
     for arg in "$@"; do
         if [[ "$arg" == --model=* ]]; then
@@ -188,7 +208,8 @@ __ai_adapter_omp() {
         system_prompt+=$'\n\nActive local skill instructions:\n'
         system_prompt+="$loaded_skills"
     fi
-    omp --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" "$memory_prompt" "$@"
+    omp --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" \
+        $provider_args "$memory_prompt" "$@"
 }
 
 # --- Example: add another harness by defining its adapter and listing it in

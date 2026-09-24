@@ -748,6 +748,19 @@ __ai_yesno() {
 typeset -gA AI_MEM_SKILLS
 typeset -ga AI_MEM_SKILL_ORDER
 
+# When OMP is the preferred harness, preserve the requested *-start provider.
+# Override these maps before sourcing this file when a provider uses a custom
+# OMP name or model. An unmapped launcher falls back to its own name.
+typeset -gA AI_MEM_OMP_PROVIDERS
+typeset -gA AI_MEM_OMP_MODELS
+[[ -n "${AI_MEM_OMP_PROVIDERS[codex]:-}" ]] || AI_MEM_OMP_PROVIDERS[codex]=openai-codex
+[[ -n "${AI_MEM_OMP_PROVIDERS[claude]:-}" ]] || AI_MEM_OMP_PROVIDERS[claude]=anthropic
+[[ -n "${AI_MEM_OMP_PROVIDERS[gemini]:-}" ]] || AI_MEM_OMP_PROVIDERS[gemini]=google
+[[ -n "${AI_MEM_OMP_PROVIDERS[agy]:-}" ]] || AI_MEM_OMP_PROVIDERS[agy]=google
+[[ -n "${AI_MEM_OMP_PROVIDERS[opencode]:-}" ]] || AI_MEM_OMP_PROVIDERS[opencode]=opencode
+[[ -n "${AI_MEM_OMP_PROVIDERS[cursor]:-}" ]] || AI_MEM_OMP_PROVIDERS[cursor]=cursor
+[[ -n "${AI_MEM_OMP_MODELS[claude]:-}" ]] || AI_MEM_OMP_MODELS[claude]=claude-sonnet-4-5
+
 # Ask which optional skills to enable. Each is independent; answer y/n per skill.
 # Echoes a pipe-joined list of chosen keys; empty means a plain session.
 __ai_session_modes_pick() {
@@ -781,6 +794,10 @@ __ai_session_start() {
     if [[ -n "${AI_MEM_PREFERRED_HARNESS:-}" && "$requested_launcher" != "$launcher" ]]; then
         echo "ai-memory: $requested_launcher-start is using preferred harness $launcher" >&2
     fi
+    # Keep the user's requested launcher visible to a preferred harness. This
+    # lets one OMP harness route codex-start and claude-start to different
+    # providers instead of silently using OMP's default provider for both.
+    export AI_MEM_REQUESTED_LAUNCHER="$requested_launcher"
 
     # Warn (never block) if this shell is running a stale copy. Everything
     # below would otherwise succeed quietly using the old behaviour, and the
