@@ -1268,6 +1268,85 @@ PROSE_OUT="$(AI_MEM_ROOT="$MIRRORVAULT" zsh -c '
 ')"
 has "$PROSE_OUT" "real content" "mirror_of is read from frontmatter only, not from a note's prose"
 
+# --- _about_me: hard "no"s inlined first, the rest indexed with a trigger ------
+# One about-me file grows until the note cap cuts it, like a long profile.
+# So `inject: always` notes are inlined at the top, and every other note costs
+# one index line with its `read_when:` trigger.
+ABOUTVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$ABOUTVAULT/_about_me"
+print -rl -- "---" "type: ai-global-profile" "---" "PROFILE_SENTINEL" > "$ABOUTVAULT/_Global_Profile.md"
+print -rl -- "---" "type: ai-about-me" "inject: always" "---" "# Non-negotiables" \
+  "> guidance for the user only" "* NEVER_RULE -- why: reason" "* [placeholder rule]" \
+  > "$ABOUTVAULT/_about_me/non-negotiables.md"
+print -rl -- "---" "type: ai-about-me" "inject: index" 'read_when: "before you plan work"' "---" \
+  "# Wants" "* WANTS_BODY" > "$ABOUTVAULT/_about_me/wants.md"
+print -rl -- "---" "type: ai-about-me" "inject: index" "read_when: when judging" "---" \
+  "# Values" "> guidance" "* [What good work means to you]" > "$ABOUTVAULT/_about_me/values.md"
+print -rl -- "---" "inject: always" "---" "* DRAFT_BODY" > "$ABOUTVAULT/_about_me/_draft.md"
+
+ABOUT_PROMPT="$(AI_MEM_ROOT="$ABOUTVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_context_prompt "/tmp/p.md" "" "/tmp/s.md"
+')"
+has   "$ABOUT_PROMPT" "NEVER_RULE"              "an inject: always note is inlined in the launch prompt"
+[[ "${ABOUT_PROMPT%%NEVER_RULE*}" != *PROFILE_SENTINEL* ]] \
+  && ok "an inject: always note comes before the global profile" \
+  || nok "an inject: always note comes before the global profile"
+hasnt "$ABOUT_PROMPT" "guidance for the user"   "blockquote guidance is not injected"
+hasnt "$ABOUT_PROMPT" "placeholder rule"        "placeholder bullets are not injected"
+has   "$ABOUT_PROMPT" "wants.md: before you plan work" "an index note is listed with its read_when trigger"
+hasnt "$ABOUT_PROMPT" "WANTS_BODY"              "an index note's body is not inlined"
+hasnt "$ABOUT_PROMPT" "values.md"               "a note with only placeholders is not listed"
+hasnt "$ABOUT_PROMPT" "DRAFT_BODY"              "a _-prefixed note is skipped"
+
+print -rl -- "---" "inject: always" "---" "${(l:3000::x:)${:-}}" "LAST_LINE" > "$ABOUTVAULT/_about_me/long.md"
+ABOUT_CAPPED="$(AI_MEM_ROOT="$ABOUTVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_about_me always
+')"
+has   "$ABOUT_CAPPED" "truncated at 1500 of"    "an inject: always note is capped at AI_MEM_ABOUT_ME_MAX_CHARS"
+hasnt "$ABOUT_CAPPED" "LAST_LINE"               "the capped always note drops its tail"
+
+NOABOUTVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$NOABOUTVAULT"
+hasnt "$(AI_MEM_ROOT="$NOABOUTVAULT" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  __ai_mem_context_prompt "/tmp/p.md" "" "/tmp/s.md"
+')" "About me" "a vault with no _about_me/ gets no about-me lines"
+
+# Seeding copies the folder once; a note the user deleted must stay deleted.
+SEEDVAULT="$(mktemp -d)/_Ai_Memory"
+AI_MEM_ROOT="$SEEDVAULT" zsh -c 'source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; __ai_mem_ensure_vault'
+exists "$SEEDVAULT/_about_me/non-negotiables.md" "a new vault is seeded with _about_me/"
+rm "$SEEDVAULT/_about_me/wants.md"
+AI_MEM_ROOT="$SEEDVAULT" zsh -c 'source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; __ai_mem_ensure_vault'
+[[ ! -e "$SEEDVAULT/_about_me/wants.md" ]] && ok "a deleted _about_me note is not re-seeded" \
+                                            || nok "a deleted _about_me note is not re-seeded"
+
+# --- ai-about-me: the interview is the session's task, only when asked -------
+ai-about-me faketest </dev/null >/dev/null 2>&1
+has "$(<"$CAPTURE")" "# About-me interview"                        "ai-about-me sends the interview protocol to the agent"
+has "$(<"$CAPTURE")" "The notes are in: $AI_MEM_ROOT/_about_me/"   "ai-about-me tells the agent where the notes are"
+has "$(<"$CAPTURE")" "Read these notes before doing anything else:" "ai-about-me still sends the memory prompt"
+ai-about-me --review faketest </dev/null >/dev/null 2>&1
+has "$(<"$CAPTURE")" "# About-me review"                           "ai-about-me --review sends the review protocol"
+faketest-start </dev/null >/dev/null 2>&1
+hasnt "$(<"$CAPTURE")" "About-me interview"                        "a normal launch carries no interview task"
+fails 'ai-about-me --bogus </dev/null'                              "ai-about-me rejects an unknown option"
+
+# The blank-notes hint goes to the human once per vault, never to the agent.
+HINTVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$HINTVAULT"
+cp -R "$REPO_ROOT/vault-template/_about_me" "$HINTVAULT/"
+HINT_CMD='source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; __ai_mem_about_me_hint'
+has "$(AI_MEM_ROOT="$HINTVAULT" zsh -c "$HINT_CMD" 2>&1)" "ai-about-me" "a blank _about_me/ prints the interview hint"
+is  "$(AI_MEM_ROOT="$HINTVAULT" zsh -c "$HINT_CMD" 2>&1)" ""            "the interview hint is shown only once per vault"
+FILLEDVAULT="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$FILLEDVAULT"
+cp -R "$REPO_ROOT/vault-template/_about_me" "$FILLEDVAULT/"
+print -rl -- "---" "inject: index" "read_when: before planning" "---" "* A real want" > "$FILLEDVAULT/_about_me/wants.md"
+is "$(AI_MEM_ROOT="$FILLEDVAULT" zsh -c "$HINT_CMD" 2>&1)" ""           "a filled _about_me/ prints no hint"
+
 # --- zsh's `path` is $PATH ----------------------------------------------------
 # `local path=...` in a zsh function replaces the special array tied to $PATH
 # with a scalar, so every external command inside that function becomes
