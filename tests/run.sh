@@ -51,7 +51,9 @@ CAPTURE="$(mktemp)"
 __ai_adapter_faketest() { print -r -- "$1" > "$CAPTURE"; }
 faketest() { : }            # stub CLI so the missing-agent guard lets faketest through
 __ai_adapter_ghost() { : }   # adapter exists but there is no `ghost` CLI on PATH
-export AI_MEM_AGENTS="claude codex agy gemini cursor opencode faketest ghost"
+OMP_CAPTURE="$(mktemp)"
+omp() { print -r -- "$*" > "$OMP_CAPTURE"; }
+export AI_MEM_AGENTS="claude codex agy gemini cursor opencode omp faketest ghost"
 typeset -gA AI_MEM_SKILLS
 AI_MEM_SKILLS[terse]='Use terse output this session?::Respond tersely; drop filler.'
 AI_MEM_SKILL_ORDER=(terse)
@@ -198,10 +200,31 @@ is "$(printf 'n\n' | __ai_session_modes_pick)" ""                "picker drops a
 has "$(__ai_session_modes_instructions terse)" "Respond tersely" "instructions inject the chosen skill's block"
 
 # --- 7. launcher generation ---------------------------------------------------
-for a in claude codex gemini cursor opencode faketest; do
+for a in claude codex gemini cursor opencode omp faketest; do
   succeeds "typeset -f ${a}-start" "generated launcher: ${a}-start"
 done
 fails 'typeset -f bogus-start' "no launcher for an unregistered agent"
+
+# The new setting is the source of truth; the old variable remains accepted
+# for existing installs but must not override an explicit harness list.
+HARNESS_CONFIG_OUT="$(AI_MEM_ROOT="$(mktemp -d)/_Ai_Memory" AI_MEM_HARNESSES=omp AI_MEM_AGENTS=codex zsh -c '
+  source "'$REPO_ROOT'/shell/ai-mem.zsh"
+  typeset -f omp-start >/dev/null && echo omp-start
+  typeset -f codex-start >/dev/null && echo codex-start
+' 2>/dev/null)"
+has "$HARNESS_CONFIG_OUT" "omp-start" "AI_MEM_HARNESSES selects the requested launcher"
+hasnt "$HARNESS_CONFIG_OUT" "codex-start" "AI_MEM_HARNESSES overrides the compatibility alias"
+
+# A preferred harness lets a familiar entry point (for example codex-start)
+# route through another harness without changing the user's muscle memory.
+PREFERRED_CAPTURE="$(mktemp)"
+__ai_adapter_preferredtest() { print -r -- "$1" > "$PREFERRED_CAPTURE"; }
+preferredtest() { :; }
+AI_MEM_PREFERRED_HARNESS=preferredtest
+__ai_session_start codex </dev/null >/dev/null 2>&1
+has "$(<"$PREFERRED_CAPTURE")" "Read these notes before doing anything else:" \
+   "preferred harness receives the codex-start session"
+unset AI_MEM_PREFERRED_HARNESS
 
 # A same-named alias from another plugin (e.g. ai-prompt-search wraps
 # claude-start/codex-start as aliases) used to make zsh refuse to `eval` the
@@ -365,11 +388,23 @@ has "$(<"$AGY_CAPTURE")" "-i"                "agy adapter opens an interactive s
 hasnt "$(<"$AGY_CAPTURE")" "--print"         "agy adapter never uses print mode, which would exit after one turn"
 unset -f agy
 
+# --- 9c. omp adapter ----------------------------------------------------------
+# omp's bare command is the interactive TUI; -p/--print is one-shot and must
+# not be used by a *-start launcher.
+__ai_adapter_omp "OMP MEMORY PROMPT" "SESSION MODE" </dev/null
+has "$(<"$OMP_CAPTURE")" "OMP MEMORY PROMPT" "omp adapter passes the memory prompt"
+has "$(<"$OMP_CAPTURE")" "--add-dir $AI_MEM_ROOT" "omp adapter grants vault access"
+has "$(<"$OMP_CAPTURE")" "--append-system-prompt" "omp adapter uses OMP's system prompt channel"
+has "$(<"$OMP_CAPTURE")" "SESSION MODE" "omp adapter injects selected session skills"
+hasnt "$(<"$OMP_CAPTURE")" "--print" "omp adapter does not use one-shot print mode"
+
 # The suite pins its own AI_MEM_AGENTS above, so assert the SHIPPED default
 # instead: without agy in it, a real user gets "command not found" from
 # agy-start with no sign that an adapter exists.
-has "$(<"$REPO_ROOT/shell/ai-mem.zsh")" "AI_MEM_AGENTS:=claude codex agy" \
-   "agy is in the shipped default AI_MEM_AGENTS"
+has "$(<"$REPO_ROOT/shell/ai-mem.zsh")" "AI_MEM_HARNESSES:=" \
+   "AI_MEM_HARNESSES is the preferred launcher setting"
+has "$(<"$REPO_ROOT/shell/ai-mem.zsh")" "opencode omp" \
+   "omp is in the shipped default AI_MEM_HARNESSES"
 typeset -f agy-start >/dev/null \
   && ok "agy-start is generated" \
   || nok "agy-start is generated"

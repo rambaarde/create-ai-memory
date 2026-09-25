@@ -309,7 +309,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 
 | Command | What it does |
 |---|---|
-| `claude-start` · `codex-start` · `agy-start` · `gemini-start` · `cursor-start` · `opencode-start` | Launch an agent with full vault context and the session-skill picker |
+| `claude-start` · `codex-start` · `agy-start` · `gemini-start` · `cursor-start` · `opencode-start` · `omp-start` | Launch a harness with full vault context and the session-skill picker |
 | `ai-start [project]` | Prepare the session (project note and fresh log) without launching an agent |
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
@@ -641,9 +641,6 @@ refactor and add `hallmark` only when you touch the UI. These are separate,
 installable Claude Code skills; the blocks above inline their behavior so a
 session still benefits even on an agent that does not have the skill installed.
 
-If you want a queryable knowledge graph of your codebase alongside your memory,
-pair create-ai-memory with [graphify](https://github.com/safishamsi/graphify).
-
 ## Your vault
 
 The vault is a folder of Markdown. Point `AI_MEM_ROOT` at a new directory or at an
@@ -716,15 +713,23 @@ backfilled `type: ai-session-log` into 350 session log(s)
 
 Edits in place, preserves frontmatter and body, idempotent.
 
-## Add another agent
+## Add another harness
 
-Launchers are not hardcoded. Each agent is one small adapter, and the
+Launchers are configurable. Each harness is one small adapter, and the
 `<name>-start` function is generated for you. `claude`, `codex`, `agy`,
-`gemini`, `cursor`, and `opencode` ship built in.
+`gemini`, `cursor`, `opencode`, and `omp` ship built in.
 
 `agy` is the [Antigravity CLI](https://antigravity.google), which in practice
 has replaced the Gemini CLI. Both adapters ship: `gemini-start` still works
 for anyone using it, and `agy-start` is the one to reach for now.
+
+`omp-start` passes the vault as an OMP workspace directory and adds the selected
+session skills through OMP's system-prompt channel. It also tells OMP to use
+and prints the active OMP provider/model selector plus a redacted
+provider-usage snapshot before the TUI opens. The snapshot includes
+weekly/account limits when the provider exposes them. Set
+`AI_MEM_OMP_SHOW_USAGE=0` to skip that preflight check. Plain `omp` is
+unchanged; it does not load the ai-memory vault or session context.
 
 To add `aider`:
 
@@ -738,7 +743,7 @@ To add `aider`:
    ```
 2. Register it in `~/.zshrc` before sourcing, or edit the default:
    ```zsh
-   export AI_MEM_AGENTS="claude codex agy gemini cursor opencode aider"
+   export AI_MEM_HARNESSES="claude codex agy gemini cursor opencode omp aider"
    ```
 3. `aider-start` now exists. No core edits.
 
@@ -877,7 +882,10 @@ git -C <repo> config core.hooksPath .githooks
 | Env var | Default | Purpose |
 |---|---|---|
 | `AI_MEM_ROOT` | `$HOME/.ai-memory/_Ai_Memory` | Vault root. Point at any folder, including an existing Obsidian vault |
-| `AI_MEM_AGENTS` | `claude codex agy gemini cursor opencode` | Space-separated agents to generate `-start` functions for |
+| `AI_MEM_HARNESSES` | `claude codex agy gemini cursor opencode omp` | Space-separated harnesses to generate `-start` functions for |
+| `AI_MEM_AGENTS` | compatibility alias | Older installs may keep using this name; `AI_MEM_HARNESSES` takes precedence |
+| `AI_MEM_PREFERRED_HARNESS` | empty | Optional override used by every `*-start`; e.g. `omp` makes `codex-start` launch OMP while keeping the familiar entry point |
+| `AI_MEM_OMP_SHOW_USAGE` | `1` | Show OMP's redacted provider/account usage snapshot before an ai-memory OMP session; set to `0` to skip |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_NOTE_MAX_CHARS` | `8000` for shell launchers; `0` for GUI MCP | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
