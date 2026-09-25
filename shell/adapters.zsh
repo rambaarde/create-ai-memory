@@ -204,6 +204,9 @@ __ai_adapter_omp() {
         export PATH="$ai_mem_bin:$PATH"
         system_prompt+=$'\nUse the executable ai-mem-search for vault searches. Do not glob or read session-log files directly when answering memory questions; use ai-mem-search so project scope, archived-log filtering, ranking, and output limits remain correct.'
     fi
+    if command -v ai-internet-search >/dev/null 2>&1; then
+        system_prompt+=$'\nUse ai-internet-search automatically for explicit web research and current or uncertain external facts. Do not substitute raw web-search guesses when this CLI is available.'
+    fi
     if [[ -n "$mode_block" ]]; then
         system_prompt+=$'\n\nActive local skill instructions:\n'
         system_prompt+="$loaded_skills"
