@@ -80,12 +80,13 @@ echo
 echo "  scaffolding vault at: $AI_MEM_ROOT"
 mkdir -p "$AI_MEM_ROOT/_projects" "$AI_MEM_ROOT/_session_logs" "$AI_MEM_ROOT/_lessons"
 
-copy_if_absent() { # never overwrite the user's real notes on a re-run
+copy_if_absent() { # never overwrite the user's real notes on a re-run; -R also copies a folder
   local src="$1" dst="$2"
-  if [ -e "$dst" ]; then echo "    keep   ${dst##*/}"; else cp "$src" "$dst"; echo "    create ${dst##*/}"; fi
+  if [ -e "$dst" ]; then echo "    keep   ${dst##*/}"; else cp -R "$src" "$dst"; echo "    create ${dst##*/}"; fi
 }
 copy_if_absent "$HERE/vault-template/_Global_Profile.md"                 "$AI_MEM_ROOT/_Global_Profile.md"
 copy_if_absent "$HERE/vault-template/_Standards.md"                      "$AI_MEM_ROOT/_Standards.md"
+copy_if_absent "$HERE/vault-template/_about_me"                          "$AI_MEM_ROOT/_about_me"
 copy_if_absent "$HERE/vault-template/_projects/_project_template.md"     "$AI_MEM_ROOT/_projects/_project_template.md"
 copy_if_absent "$HERE/vault-template/_session_logs/_session_template.md" "$AI_MEM_ROOT/_session_logs/_session_template.md"
 copy_if_absent "$HERE/vault-template/_lessons/_lesson_template.md"       "$AI_MEM_ROOT/_lessons/_lesson_template.md"

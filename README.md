@@ -52,7 +52,8 @@ Three layers, each injected at the right scope:
 
 | Layer | Lives in | Injected | Holds |
 |---|---|---|---|
-| **Global** | `_Global_Profile.md`, `_Standards.md` | every session | who you are, your rules, commit policy |
+| **Global** | `_Global_Profile.md`, `_Standards.md` | every session | your rules, commit policy |
+| **About me** | `_about_me/*.md` | every session: hard "no"s in full, the rest as an index | non-negotiables, wants, interests, values, expertise |
 | **Project** | `_projects/<repo>.md` | sessions in that repo | purpose, architecture, constraints, decisions |
 | **Session** | `_session_logs/<repo>/<timestamp>.md` | next session as carryover | what changed, blockers, next steps |
 
@@ -313,6 +314,7 @@ optional. Set `AI_MEM_ROOT` in `~/.zshrc` first if you do not want the default
 | `ai-context [project]` | Print the vault context block for the current repo, and arm the git commit guard |
 | `ai-note <text>` | Append a timestamped note to today's session log while you work |
 | `ai-lesson <topic-slug> <problem> <solution>` | Append a dated Problem/Solution entry to a cross-project `_lessons/<topic-slug>.md` -- decisions, mistakes, solutions worth recalling outside the current project |
+| `ai-about-me [--review] [harness]` | Fill `_about_me/` by interview. The agent asks one question at a time, asks about real past events before hypotheticals, asks "why does that matter?" to find the reason behind each rule, and writes a note only after you approve its draft. `--review` proposes rules found in 2 or more of your lessons and session logs; you accept, change or reject each one. The harness defaults to the first in `AI_MEM_HARNESSES`. When `_about_me/` holds only placeholders, the next launch tells you once, on stderr, never the agent |
 | `ai-mem-ingest --source-id <id> --title <t> --date <ISO> [...]` | File a distilled external artifact -- a meeting, a recorded call, a video, a voice note -- as one note in `_transcripts/`. Writes the summary, decisions, action items, attendee `[[wikilinks]]` and a link to the source; it never embeds the raw transcript body, because a full transcript is bulk the agent pays for and rarely needs. Re-ingesting the same `--source-id` updates that one note instead of filing a second copy. `ai-mem-search` covers `_transcripts/` with no extra path |
 | `ai-mem-lint [--fix]` | Check the vault's links: orphaned session logs, dangling `previous` links, unreferenced project notes, notes missing the `type:` field, and **dangling `[[wikilinks]]`** -- a link pointing at a note that does not exist (a dead edge in the graph), reported but never auto-removed. `--fix` backfills `type:` into session logs written before the field existed |
 | `ai-mem-search <term> [project]` | Case-insensitive literal search across the vault (or one project's logs). Lessons rank first, and within them by *reinforcement* -- a lesson recalled more often (more dated entries) ranks above a once-seen one -- then by date; archived logs (see `ai-mem-sleep`) are skipped. Paths print relative to a root stated once in the header. Output is capped (`AI_MEM_SEARCH_LIMIT`, default 25) with an explicit `N hidden` notice, because the usual caller is an agent with a finite context window. Also resolves any `[[wikilink]]` on a matched line to its project note -- one hop out along the graph, always on, not a flag to remember |
@@ -459,6 +461,27 @@ Matching is exact and line-by-line, so anything reworded survives. It fails
 note in full. Injecting twice costs tokens; dropping a note costs the agent
 context it was promised.
 
+### About me: hard "no"s in full, the rest on demand
+
+`_about_me/` holds the human side of the profile as several small notes, not
+one file. One file grows until the note cap cuts it off, like a long profile.
+Each note sets `inject:` in its frontmatter:
+
+| `inject:` | What reaches the prompt | Use it for |
+|---|---|---|
+| `always` | the body, at the **top** of the prompt, capped at 1,500 chars (`AI_MEM_ABOUT_ME_MAX_CHARS`) | non-negotiables |
+| anything else | one index line: the file name and its `read_when:` trigger | wants, interests, values, expertise, modes |
+
+Hard "no"s are never behind a link: an agent that must open a file to see a
+rule often does not open it. The other notes cost one line each, however long
+they grow, and the `read_when:` trigger tells the agent when to open them.
+
+Blockquotes and `[bracketed]` placeholder bullets are notes to you and are
+never injected. A note that holds only those is not listed. A note whose name
+starts with `_` is skipped. Write these notes yourself, or run `ai-about-me`
+to fill them by interview. An agent may propose a change, but a profile the
+agent edits is no longer your own view of yourself.
+
 ### Every path into the prompt is bounded
 
 The launch prompt is paid **every session, in every project**, so anything
@@ -467,6 +490,7 @@ that can grow without limit is a cost that compounds silently.
 | what reaches the prompt | bound |
 |---|---|
 | Profile and standards | **8,000 chars** each for shell launchers; GUI MCP is uncapped by default (`AI_MEM_NOTE_MAX_CHARS`) |
+| `_about_me/` | `inject: always` notes **1,500 chars** each (`AI_MEM_ABOUT_ME_MAX_CHARS`); every other note one index line |
 | Previous session outcome | 4 fields, 500 chars each |
 | Lesson index | 200 slugs, names only |
 | Project note | **a path, not its contents** |
@@ -630,6 +654,11 @@ search over your own AI memory, plus plain `grep` when you want it.
 $AI_MEM_ROOT/
   _Global_Profile.md          your cross-project rules      (injected every session)
   _Standards.md               extra shared standards        (injected every session)
+  _about_me/
+    non-negotiables.md         hard "no"s                    (injected every session)
+    wants.md, interests.md,    who you are                   (one index line each;
+    values.md, expertise.md,                                  read on demand)
+    modes.md
   _projects/
     _project_template.md       scaffold for new project notes
     <repo>.md                  per-project durable context
@@ -646,8 +675,9 @@ $AI_MEM_ROOT/
 ```
 
 Notes are created from templates on first use and never overwritten. Edit
-`_Global_Profile.md` and `_Standards.md` to make them yours; the shipped versions
-are sanitized placeholders.
+`_Global_Profile.md`, `_Standards.md` and the notes in `_about_me/` to make them
+yours; the shipped versions are sanitized placeholders. `_about_me/` is seeded
+only when the folder does not exist, so a note you delete stays deleted.
 
 ## Open Knowledge Format
 
@@ -851,6 +881,7 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_NOTE_MAX_CHARS` | `8000` for shell launchers; `0` for GUI MCP | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
+| `AI_MEM_ABOUT_ME_MAX_CHARS` | `1500` | Cap on each `inject: always` note in `_about_me/`. Kept small on purpose: these notes are paid for in every session. Truncation states the real total and the path |
 | `AI_MEM_SEARCH_LIMIT` | `25` | Result lines `ai-mem-search` prints before it truncates. The default is sized for an agent's context window; raise it when you are reading the output yourself (see [How search works](#how-search-works)) |
 | `AI_MEM_HOME` | the module's own directory | Exported by the module when it is sourced, not set by you. A cron job, a launchd agent or any non-interactive shell can re-source the module with `zsh -c 'source "$AI_MEM_HOME/ai-mem.zsh"; ...'` instead of a hard-coded path |
 | `AI_MEM_SEARCH_PER_FILE` | `1` | Lines shown per file once the cap binds. Spreads results across notes instead of on the chattiest one; ignored when every match already fits |
