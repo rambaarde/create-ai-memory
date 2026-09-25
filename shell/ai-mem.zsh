@@ -419,6 +419,15 @@ __ai_mem_ensure_vault() {
         fi
     done
 
+    # _about_me/ is seeded as a whole, only when the folder does not exist.
+    # Seeding per file would bring back a note the user deleted on purpose,
+    # at every launch.
+    local about_src="$AI_MEM_TEMPLATE_SRC/_about_me" about_dst="$AI_MEM_ROOT/_about_me"
+    if [[ -d "$about_src" && ! -e "$about_dst" ]]; then
+        __ai_mem_guard "$about_dst" || return 1
+        cp -R "$about_src" "$about_dst"
+    fi
+
     # Seeding only fills in a MISSING file, which is right -- these are the
     # user's notes and templates, and an upgrade must not overwrite edits they
     # made. But that leaves an existing vault on whatever templates it had
@@ -595,6 +604,134 @@ __ai_mem_lesson_index() {
     return 0
 }
 
+# The human side of the profile: who the user is, what they want, and what
+# they refuse. It lives in _about_me/ as several small notes rather than one
+# file, because one file grows until the note cap truncates it -- which is
+# exactly what happens to a long _Global_Profile.md.
+#
+# Each note says in frontmatter how it reaches the agent:
+#   inject: always     -> body inlined at the TOP of the prompt. For hard
+#                         "no"s: a rule the agent must open a file to see is
+#                         a rule it will often never see.
+#   anything else      -> one index line naming the file and `read_when:`,
+#                         the trigger that tells the agent WHEN to open it.
+#                         A bare link with no trigger is routinely ignored.
+# An `always` note is capped separately and tightly (AI_MEM_ABOUT_ME_MAX_CHARS),
+# so growth there shows up as a truncation notice instead of silent bloat.
+#
+# A note that is still only template scaffolding (headings, blockquotes,
+# [bracketed] placeholder bullets) is skipped: pointing the agent at a blank
+# template reads as context and carries none. Blockquotes and placeholder
+# bullets are also dropped from an injected body -- they are notes to the
+# user, and every character there is paid for in every session. Notes whose
+# name starts with `_` are skipped, matching every other folder's templates.
+#
+# Usage: __ai_mem_about_me always|index
+__ai_mem_about_me() {
+    local mode="${1:-}" dir="$AI_MEM_ROOT/_about_me"
+    [[ -d "$dir" ]] || return 0
+
+    local -a notes
+    notes=("$dir"/*.md(N.on))
+    (( $#notes )) || return 0
+
+    local f fm inject read_when body cap="${AI_MEM_ABOUT_ME_MAX_CHARS:-1500}"
+    local -a index_lines
+    for f in $notes; do
+        [[ "${f:t}" == _* ]] && continue
+        __ai_mem_guard "$f" || return 1
+
+        # Frontmatter only when line 1 opens it, so prose can never pose as
+        # a declaration (same rule as mirror_of).
+        fm=""
+        [[ "$(head -1 "$f")" == "---" ]] && fm="$(sed -n '2,/^---$/p' "$f")"
+        # Values may be YAML-quoted; sed strips the key, surrounding space,
+        # and one pair of quotes.
+        inject="$(print -r -- "$fm" | sed -n "s/^inject:[[:space:]]*[\"']\{0,1\}\([^\"']*\)[\"']\{0,1\}[[:space:]]*\$/\1/p" | head -1)"
+        read_when="$(print -r -- "$fm" | sed -n "s/^read_when:[[:space:]]*[\"']\{0,1\}\([^\"']*\)[\"']\{0,1\}[[:space:]]*\$/\1/p" | head -1)"
+
+        # Body without frontmatter, blockquotes, or placeholder bullets; empty
+        # when nothing but scaffolding is left.
+        body="$(awk '
+            NR == 1 && $0 == "---" { fm = 1; next }
+            fm { if ($0 == "---") fm = 0; next }
+            /^>/ || /^[*-][[:space:]]+\[[^]]*\][[:space:]]*$/ { next }
+            /^[[:space:]]*$/ { if (n && lines[n] != "") lines[++n] = ""; next }
+            { lines[++n] = $0 }
+            !/^#/ { filled = 1 }
+            END { if (filled) for (i = 1; i <= n; i++) print lines[i] }
+        ' "$f")"
+        [[ -n "${body//[[:space:]]/}" ]] || continue
+
+        if [[ "$inject" == always ]]; then
+            [[ "$mode" == always ]] || continue
+            print -r -- "- About me -- ${f:t} (always in force):"
+            AI_MEM_NOTE_MAX_CHARS="$cap" __ai_mem_cap_note "$body" "$f"
+            print
+        else
+            [[ "$mode" == index ]] || continue
+            index_lines+=("  * ${f:t}: ${read_when:-read when relevant to the task} -- $f")
+        fi
+    done
+
+    if [[ "$mode" == index ]] && (( $#index_lines )); then
+        print -r -- "- About me -- more notes, NOT included here. Read a file with \`cat\` when its trigger applies:"
+        print -rl -- $index_lines
+    fi
+    return 0
+}
+
+# Tell the HUMAN, once per vault, that _about_me/ is still blank. It goes to
+# stderr and never into the prompt: an agent told "this is empty" at every
+# launch would nag the user about it in every session. The marker lives in
+# the vault, so each vault (and each test fixture) is hinted independently.
+__ai_mem_about_me_hint() {
+    local dir="$AI_MEM_ROOT/_about_me"
+    local marker="$dir/.about-me-hinted"
+    [[ -d "$dir" && ! -e "$marker" ]] || return 0
+    [[ -z "$(__ai_mem_about_me index 2>/dev/null)" ]] || return 0
+    print -r -- "ai-memory: _about_me/ has only placeholders. Run 'ai-about-me' to fill it by interview. (Shown once.)" >&2
+    __ai_mem_guard "$marker" && : > "$marker"
+    return 0
+}
+
+# Fill _about_me/ by interview, or review it against the vault's evidence.
+#
+#   ai-about-me [harness]            interview: one question at a time
+#   ai-about-me --review [harness]   propose rules from lessons and session logs
+#
+# The agent is started like <harness>-start, with the protocol from
+# about-me-interview.md or about-me-review.md as the session's task. The
+# protocols are written for the agent: ask before writing, draft for approval,
+# never add a rule the user did not state. A self-edited profile stops being
+# the user's own view of themselves.
+ai-about-me() {
+    __ai_mem_paths
+    local mode=interview
+    case "${1:-}" in
+        --review) mode=review; shift ;;
+        -h|--help)
+            print -r -- "usage: ai-about-me [--review] [harness]"
+            print -r -- "  Interview: the agent asks one question at a time and fills _about_me/ after you approve each draft."
+            print -r -- "  --review:  the agent proposes rules from your lessons and session logs; you accept or reject each one."
+            return 0 ;;
+        -*) print -r -- "ai-about-me: unknown option '$1' (see ai-about-me --help)" >&2; return 1 ;;
+    esac
+
+    local protocol="$AI_MEM_HOME/about-me-$mode.md"
+    if [[ ! -f "$protocol" ]]; then
+        print -r -- "ai-about-me: protocol file not found: $protocol" >&2
+        return 1
+    fi
+    local launcher="${1:-${${(z)AI_MEM_HARNESSES}[1]}}"
+    (( $# )) && shift
+
+    __ai_mem_ensure_vault || return 1
+    local task
+    task="$(<"$protocol")"$'\n\n'"The notes are in: $AI_MEM_ROOT/_about_me/"
+    AI_MEM_SESSION_TASK="$task" __ai_session_start "$launcher" "$@"
+}
+
 __ai_mem_context_prompt() {
     __ai_mem_paths
     local project_note="${1:-}"
@@ -641,16 +778,25 @@ __ai_mem_context_prompt() {
     fi
     local project_label="$project_note"
     [[ -n "$project_label" ]] || project_label="none (GUI/MCP global memory; no repository context)"
+    # Hard "no"s go first: models follow early instructions most reliably,
+    # and the note cap truncates from the end. The index sits with the other
+    # pointers. Each block carries its own trailing newline so an absent
+    # _about_me/ leaves the prompt byte-identical to before.
+    local about_always about_index
+    about_always="$(__ai_mem_about_me always)" || return 1
+    about_index="$(__ai_mem_about_me index)" || return 1
+    [[ -n "$about_always" ]] && about_always+=$'\n\n'
+    [[ -n "$about_index" ]] && about_index+=$'\n'
 
     cat <<EOF
 Read these notes before doing anything else:
-- Global profile:
+${about_always}- Global profile:
 $(__ai_mem_note_contents "$AI_MEM_GLOBAL")
 
 - Standards:
 $(__ai_mem_note_contents "$AI_MEM_STANDARDS")
 
-- Project context: $project_label$project_state
+${about_index}- Project context: $project_label$project_state
 $previous_session_block
 - Active session log: $session_note
 $(__ai_mem_lesson_index)
@@ -865,6 +1011,15 @@ __ai_session_start() {
     if [[ -n "$session_prompt" ]]; then
         memory_prompt+=$'\n\n'
         memory_prompt+="$session_prompt"
+    fi
+    # A task for the whole session (e.g. the ai-about-me interview). It rides
+    # in the opening message only: adapters also forward "$@" as CLI args,
+    # so passing it as an argument would send it twice to some harnesses.
+    if [[ -n "${AI_MEM_SESSION_TASK:-}" ]]; then
+        memory_prompt+=$'\n\n'
+        memory_prompt+="$AI_MEM_SESSION_TASK"
+    else
+        __ai_mem_about_me_hint
     fi
 
     __ai_mem_mark_commit_ready "$active_project" "$launcher-start" || return 1
