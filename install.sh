@@ -72,29 +72,36 @@ banner
 # --- gather settings ---------------------------------------------------------
 AI_MEM_ROOT="${AI_MEM_ROOT:-$HOME/.ai-memory/_Ai_Memory}"
 ask AI_MEM_ROOT   "Where should your memory vault live?" "$AI_MEM_ROOT"
-AI_MEM_AGENTS="${AI_MEM_AGENTS:-claude codex agy gemini cursor opencode}"
-ask AI_MEM_AGENTS "Which agents should get <agent>-start launchers?" "$AI_MEM_AGENTS"
+AI_MEM_HARNESSES="${AI_MEM_HARNESSES:-${AI_MEM_AGENTS:-claude codex agy gemini cursor opencode omp}}"
+ask AI_MEM_HARNESSES "Which harnesses should get <harness>-start launchers?" "$AI_MEM_HARNESSES"
+AI_MEM_PREFERRED_HARNESS="${AI_MEM_PREFERRED_HARNESS:-}"
+ask AI_MEM_PREFERRED_HARNESS "Which harness should *-start use by default? (blank keeps the named launcher)" "$AI_MEM_PREFERRED_HARNESS"
 
 # --- scaffold the vault ------------------------------------------------------
 echo
 echo "  scaffolding vault at: $AI_MEM_ROOT"
 mkdir -p "$AI_MEM_ROOT/_projects" "$AI_MEM_ROOT/_session_logs" "$AI_MEM_ROOT/_lessons"
 
-copy_if_absent() { # never overwrite the user's real notes on a re-run
+copy_if_absent() { # never overwrite the user's real notes on a re-run; -R also copies a folder
   local src="$1" dst="$2"
-  if [ -e "$dst" ]; then echo "    keep   ${dst##*/}"; else cp "$src" "$dst"; echo "    create ${dst##*/}"; fi
+  if [ -e "$dst" ]; then echo "    keep   ${dst##*/}"; else cp -R "$src" "$dst"; echo "    create ${dst##*/}"; fi
 }
 copy_if_absent "$HERE/vault-template/_Global_Profile.md"                 "$AI_MEM_ROOT/_Global_Profile.md"
 copy_if_absent "$HERE/vault-template/_Standards.md"                      "$AI_MEM_ROOT/_Standards.md"
+copy_if_absent "$HERE/vault-template/_about_me"                          "$AI_MEM_ROOT/_about_me"
 copy_if_absent "$HERE/vault-template/_projects/_project_template.md"     "$AI_MEM_ROOT/_projects/_project_template.md"
 copy_if_absent "$HERE/vault-template/_session_logs/_session_template.md" "$AI_MEM_ROOT/_session_logs/_session_template.md"
 copy_if_absent "$HERE/vault-template/_lessons/_lesson_template.md"       "$AI_MEM_ROOT/_lessons/_lesson_template.md"
 
 # --- assemble the ~/.zshrc lines ---------------------------------------------
 LINES="export AI_MEM_ROOT=\"$AI_MEM_ROOT\""
-if [ "$AI_MEM_AGENTS" != "claude codex agy gemini cursor opencode" ]; then
+if [ "$AI_MEM_HARNESSES" != "claude codex agy gemini cursor opencode omp" ]; then
   LINES="$LINES
-export AI_MEM_AGENTS=\"$AI_MEM_AGENTS\""
+export AI_MEM_HARNESSES=\"$AI_MEM_HARNESSES\""
+fi
+if [ -n "$AI_MEM_PREFERRED_HARNESS" ]; then
+  LINES="$LINES
+export AI_MEM_PREFERRED_HARNESS=\"$AI_MEM_PREFERRED_HARNESS\""
 fi
 LINES="$LINES
 source \"$HERE/shell/ai-mem.zsh\""
@@ -135,7 +142,7 @@ cat <<EOF
            (your memory; safe to back up, sync, or open in Obsidian)
 
   From inside any git repo, run:  claude-start
-  (or codex-start / agy-start / gemini-start / cursor-start / opencode-start)
+  (or codex-start / agy-start / gemini-start / cursor-start / opencode-start / omp-start)
 
   Optional integrations: see $HERE/hooks/  and the README.
 EOF

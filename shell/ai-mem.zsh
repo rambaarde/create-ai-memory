@@ -1,8 +1,8 @@
 # === AI CLI + Obsidian memory ===
 # Portable, agent-agnostic session memory. Source this from ~/.zshrc after
 # exporting AI_MEM_ROOT to point at your vault. Zsh-only (uses print -r, ${(s)},
-# and associative arrays). Add a new agent by defining __ai_adapter_<name> in adapters.zsh and
-# listing it in AI_MEM_AGENTS; a matching <name>-start function is generated.
+# and associative arrays). Add a new harness by defining __ai_adapter_<name> in adapters.zsh and
+# listing it in AI_MEM_HARNESSES; a matching <name>-start function is generated.
 #
 # Private helpers are named __ai_* with TWO leading underscores, deliberately.
 # Claude Code snapshots the interactive shell and replays that snapshot for
@@ -327,41 +327,6 @@ __ai_mem_project_session_dir() {
     print -r -- "$AI_MEM_SESSION_DIR/$project_name"
 }
 
-__ai_mem_graphify_repo_root() {
-    local git_root=""
-    git_root="$(git rev-parse --show-toplevel 2>/dev/null)" || true
-    if [[ -n "$git_root" ]]; then
-        print -r -- "$git_root"
-    else
-        print -r -- "$PWD"
-    fi
-}
-
-__ai_mem_graphify_context() {
-    local repo_root="$(__ai_mem_graphify_repo_root)"
-    local graph_root="$repo_root/graphify-out"
-    local graph_json="$graph_root/graph.json"
-    local graph_report="$graph_root/GRAPH_REPORT.md"
-    local graph_wiki="$graph_root/wiki/index.md"
-
-    if [[ ! -f "$graph_json" ]]; then
-        return 0
-    fi
-
-    export AI_GRAPHIFY_ROOT="$graph_root"
-    export AI_GRAPHIFY_GRAPH_JSON="$graph_json"
-
-    printf '%s\n' \
-        "Graphify context:" \
-        "- Knowledge graph available at: $graph_root" \
-        "- Use graphify query/path/explain before raw grep for codebase or architecture questions." \
-        "- Read the graph report for broad overviews: $graph_report"
-
-    if [[ -f "$graph_wiki" ]]; then
-        printf '%s\n' "- Use the wiki index for broad navigation: $graph_wiki"
-    fi
-}
-
 # Returns the newest saved session log for the current project.
 # The active run gets a fresh log, so this only feeds carryover context.
 __ai_mem_latest_session_log() {
@@ -418,6 +383,15 @@ __ai_mem_ensure_vault() {
             cp "$src" "$dst"
         fi
     done
+
+    # _about_me/ is seeded as a whole, only when the folder does not exist.
+    # Seeding per file would bring back a note the user deleted on purpose,
+    # at every launch.
+    local about_src="$AI_MEM_TEMPLATE_SRC/_about_me" about_dst="$AI_MEM_ROOT/_about_me"
+    if [[ -d "$about_src" && ! -e "$about_dst" ]]; then
+        __ai_mem_guard "$about_dst" || return 1
+        cp -R "$about_src" "$about_dst"
+    fi
 
     # Seeding only fills in a MISSING file, which is right -- these are the
     # user's notes and templates, and an upgrade must not overwrite edits they
@@ -595,6 +569,134 @@ __ai_mem_lesson_index() {
     return 0
 }
 
+# The human side of the profile: who the user is, what they want, and what
+# they refuse. It lives in _about_me/ as several small notes rather than one
+# file, because one file grows until the note cap truncates it -- which is
+# exactly what happens to a long _Global_Profile.md.
+#
+# Each note says in frontmatter how it reaches the agent:
+#   inject: always     -> body inlined at the TOP of the prompt. For hard
+#                         "no"s: a rule the agent must open a file to see is
+#                         a rule it will often never see.
+#   anything else      -> one index line naming the file and `read_when:`,
+#                         the trigger that tells the agent WHEN to open it.
+#                         A bare link with no trigger is routinely ignored.
+# An `always` note is capped separately and tightly (AI_MEM_ABOUT_ME_MAX_CHARS),
+# so growth there shows up as a truncation notice instead of silent bloat.
+#
+# A note that is still only template scaffolding (headings, blockquotes,
+# [bracketed] placeholder bullets) is skipped: pointing the agent at a blank
+# template reads as context and carries none. Blockquotes and placeholder
+# bullets are also dropped from an injected body -- they are notes to the
+# user, and every character there is paid for in every session. Notes whose
+# name starts with `_` are skipped, matching every other folder's templates.
+#
+# Usage: __ai_mem_about_me always|index
+__ai_mem_about_me() {
+    local mode="${1:-}" dir="$AI_MEM_ROOT/_about_me"
+    [[ -d "$dir" ]] || return 0
+
+    local -a notes
+    notes=("$dir"/*.md(N.on))
+    (( $#notes )) || return 0
+
+    local f fm inject read_when body cap="${AI_MEM_ABOUT_ME_MAX_CHARS:-1500}"
+    local -a index_lines
+    for f in $notes; do
+        [[ "${f:t}" == _* ]] && continue
+        __ai_mem_guard "$f" || return 1
+
+        # Frontmatter only when line 1 opens it, so prose can never pose as
+        # a declaration (same rule as mirror_of).
+        fm=""
+        [[ "$(head -1 "$f")" == "---" ]] && fm="$(sed -n '2,/^---$/p' "$f")"
+        # Values may be YAML-quoted; sed strips the key, surrounding space,
+        # and one pair of quotes.
+        inject="$(print -r -- "$fm" | sed -n "s/^inject:[[:space:]]*[\"']\{0,1\}\([^\"']*\)[\"']\{0,1\}[[:space:]]*\$/\1/p" | head -1)"
+        read_when="$(print -r -- "$fm" | sed -n "s/^read_when:[[:space:]]*[\"']\{0,1\}\([^\"']*\)[\"']\{0,1\}[[:space:]]*\$/\1/p" | head -1)"
+
+        # Body without frontmatter, blockquotes, or placeholder bullets; empty
+        # when nothing but scaffolding is left.
+        body="$(awk '
+            NR == 1 && $0 == "---" { fm = 1; next }
+            fm { if ($0 == "---") fm = 0; next }
+            /^>/ || /^[*-][[:space:]]+\[[^]]*\][[:space:]]*$/ { next }
+            /^[[:space:]]*$/ { if (n && lines[n] != "") lines[++n] = ""; next }
+            { lines[++n] = $0 }
+            !/^#/ { filled = 1 }
+            END { if (filled) for (i = 1; i <= n; i++) print lines[i] }
+        ' "$f")"
+        [[ -n "${body//[[:space:]]/}" ]] || continue
+
+        if [[ "$inject" == always ]]; then
+            [[ "$mode" == always ]] || continue
+            print -r -- "- About me -- ${f:t} (always in force):"
+            AI_MEM_NOTE_MAX_CHARS="$cap" __ai_mem_cap_note "$body" "$f"
+            print
+        else
+            [[ "$mode" == index ]] || continue
+            index_lines+=("  * ${f:t}: ${read_when:-read when relevant to the task} -- $f")
+        fi
+    done
+
+    if [[ "$mode" == index ]] && (( $#index_lines )); then
+        print -r -- "- About me -- more notes, NOT included here. Read a file with \`cat\` when its trigger applies:"
+        print -rl -- $index_lines
+    fi
+    return 0
+}
+
+# Tell the HUMAN, once per vault, that _about_me/ is still blank. It goes to
+# stderr and never into the prompt: an agent told "this is empty" at every
+# launch would nag the user about it in every session. The marker lives in
+# the vault, so each vault (and each test fixture) is hinted independently.
+__ai_mem_about_me_hint() {
+    local dir="$AI_MEM_ROOT/_about_me"
+    local marker="$dir/.about-me-hinted"
+    [[ -d "$dir" && ! -e "$marker" ]] || return 0
+    [[ -z "$(__ai_mem_about_me index 2>/dev/null)" ]] || return 0
+    print -r -- "ai-memory: _about_me/ has only placeholders. Run 'ai-about-me' to fill it by interview. (Shown once.)" >&2
+    __ai_mem_guard "$marker" && : > "$marker"
+    return 0
+}
+
+# Fill _about_me/ by interview, or review it against the vault's evidence.
+#
+#   ai-about-me [harness]            interview: one question at a time
+#   ai-about-me --review [harness]   propose rules from lessons and session logs
+#
+# The agent is started like <harness>-start, with the protocol from
+# about-me-interview.md or about-me-review.md as the session's task. The
+# protocols are written for the agent: ask before writing, draft for approval,
+# never add a rule the user did not state. A self-edited profile stops being
+# the user's own view of themselves.
+ai-about-me() {
+    __ai_mem_paths
+    local mode=interview
+    case "${1:-}" in
+        --review) mode=review; shift ;;
+        -h|--help)
+            print -r -- "usage: ai-about-me [--review] [harness]"
+            print -r -- "  Interview: the agent asks one question at a time and fills _about_me/ after you approve each draft."
+            print -r -- "  --review:  the agent proposes rules from your lessons and session logs; you accept or reject each one."
+            return 0 ;;
+        -*) print -r -- "ai-about-me: unknown option '$1' (see ai-about-me --help)" >&2; return 1 ;;
+    esac
+
+    local protocol="$AI_MEM_HOME/about-me-$mode.md"
+    if [[ ! -f "$protocol" ]]; then
+        print -r -- "ai-about-me: protocol file not found: $protocol" >&2
+        return 1
+    fi
+    local launcher="${1:-${${(z)AI_MEM_HARNESSES}[1]}}"
+    (( $# )) && shift
+
+    __ai_mem_ensure_vault || return 1
+    local task
+    task="$(<"$protocol")"$'\n\n'"The notes are in: $AI_MEM_ROOT/_about_me/"
+    AI_MEM_SESSION_TASK="$task" __ai_session_start "$launcher" "$@"
+}
+
 __ai_mem_context_prompt() {
     __ai_mem_paths
     local project_note="${1:-}"
@@ -641,16 +743,25 @@ __ai_mem_context_prompt() {
     fi
     local project_label="$project_note"
     [[ -n "$project_label" ]] || project_label="none (GUI/MCP global memory; no repository context)"
+    # Hard "no"s go first: models follow early instructions most reliably,
+    # and the note cap truncates from the end. The index sits with the other
+    # pointers. Each block carries its own trailing newline so an absent
+    # _about_me/ leaves the prompt byte-identical to before.
+    local about_always about_index
+    about_always="$(__ai_mem_about_me always)" || return 1
+    about_index="$(__ai_mem_about_me index)" || return 1
+    [[ -n "$about_always" ]] && about_always+=$'\n\n'
+    [[ -n "$about_index" ]] && about_index+=$'\n'
 
     cat <<EOF
 Read these notes before doing anything else:
-- Global profile:
+${about_always}- Global profile:
 $(__ai_mem_note_contents "$AI_MEM_GLOBAL")
 
 - Standards:
 $(__ai_mem_note_contents "$AI_MEM_STANDARDS")
 
-- Project context: $project_label$project_state
+${about_index}- Project context: $project_label$project_state
 $previous_session_block
 - Active session log: $session_note
 $(__ai_mem_lesson_index)
@@ -658,7 +769,7 @@ $(__ai_mem_lesson_index)
 Use the Obsidian vault as the persistent memory layer.
 Treat the global profile and standards note as the shared baseline for every run.
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
-For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself; both are zsh functions from the sourced module, so \`command -v\` finds them but \`which\` under bash will not. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
+For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
 When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down; lessons are ranked above session logs in the results, so a hit under \`_lessons/\` is the recorded fix.
 Search ONE distinctive word, not a sentence. Matching is literal substring, so a whole error line ('command not found: sed') finds nothing while 'command not found' finds it, and a bare tool name ('sed', 'git') returns hundreds of irrelevant lines. Pick the most unusual word in the symptom and try two or three of them separately.
 If the user asks to see, open or browse their memory rather than search it, run \`ai-mem-serve\` -- it opens the vault as a graph in their browser, and is safe to run again if it is already up.
@@ -783,6 +894,19 @@ __ai_yesno() {
 typeset -gA AI_MEM_SKILLS
 typeset -ga AI_MEM_SKILL_ORDER
 
+# When OMP is the preferred harness, preserve the requested *-start provider.
+# Override these maps before sourcing this file when a provider uses a custom
+# OMP name or model. An unmapped launcher falls back to its own name.
+typeset -gA AI_MEM_OMP_PROVIDERS
+typeset -gA AI_MEM_OMP_MODELS
+[[ -n "${AI_MEM_OMP_PROVIDERS[codex]:-}" ]] || AI_MEM_OMP_PROVIDERS[codex]=openai-codex
+[[ -n "${AI_MEM_OMP_PROVIDERS[claude]:-}" ]] || AI_MEM_OMP_PROVIDERS[claude]=anthropic
+[[ -n "${AI_MEM_OMP_PROVIDERS[gemini]:-}" ]] || AI_MEM_OMP_PROVIDERS[gemini]=google
+[[ -n "${AI_MEM_OMP_PROVIDERS[agy]:-}" ]] || AI_MEM_OMP_PROVIDERS[agy]=google
+[[ -n "${AI_MEM_OMP_PROVIDERS[opencode]:-}" ]] || AI_MEM_OMP_PROVIDERS[opencode]=opencode
+[[ -n "${AI_MEM_OMP_PROVIDERS[cursor]:-}" ]] || AI_MEM_OMP_PROVIDERS[cursor]=cursor
+[[ -n "${AI_MEM_OMP_MODELS[claude]:-}" ]] || AI_MEM_OMP_MODELS[claude]=claude-sonnet-4-5
+
 # Ask which optional skills to enable. Each is independent; answer y/n per skill.
 # Echoes a pipe-joined list of chosen keys; empty means a plain session.
 __ai_session_modes_pick() {
@@ -807,10 +931,19 @@ __ai_session_modes_instructions() {
 
 # Start an AI client with the shared memory block and the chosen session mode.
 __ai_session_start() {
-    local launcher="${1:-}"
+    local requested_launcher="${1:-}"
+    local launcher="${AI_MEM_PREFERRED_HARNESS:-$requested_launcher}"
     if (( $# > 0 )); then
         shift
     fi
+
+    if [[ -n "${AI_MEM_PREFERRED_HARNESS:-}" && "$requested_launcher" != "$launcher" ]]; then
+        echo "ai-memory: $requested_launcher-start is using preferred harness $launcher" >&2
+    fi
+    # Keep the user's requested launcher visible to a preferred harness. This
+    # lets one OMP harness route codex-start and claude-start to different
+    # providers instead of silently using OMP's default provider for both.
+    export AI_MEM_REQUESTED_LAUNCHER="$requested_launcher"
 
     # Warn (never block) if this shell is running a stale copy. Everything
     # below would otherwise succeed quietly using the old behaviour, and the
@@ -828,7 +961,7 @@ __ai_session_start() {
     # session log is created. Cursor is exempt: its adapter falls back to opening
     # the app when the `cursor` CLI is absent.
     if [[ "$launcher" != cursor ]] && ! command -v "$launcher" >/dev/null 2>&1; then
-        echo "ai-memory: '$launcher' CLI not found on PATH. Install it, or drop it from AI_MEM_AGENTS." >&2
+        echo "ai-memory: '$launcher' CLI not found on PATH. Install it, or remove it from AI_MEM_HARNESSES." >&2
         return 1
     fi
 
@@ -840,7 +973,12 @@ __ai_session_start() {
     __ai_mem_export_active "$active_project" "$previous_session_note" "$session_note"
 
     local session_modes mode_block
-    session_modes="$(__ai_session_modes_pick)" || return 1
+    if [[ -n "${AI_MEM_MANUAL_SKILLS:-}" ]]; then
+        # One-off opt-in for skills that should not appear in the startup picker.
+        session_modes="$AI_MEM_MANUAL_SKILLS"
+    else
+        session_modes="$(__ai_session_modes_pick)" || return 1
+    fi
     mode_block="$(__ai_session_modes_instructions "$session_modes")"
 
     # AI_SESSION_MODES carries the chosen skill keys; AI_SESSION_STYLE_LABEL
@@ -851,20 +989,25 @@ __ai_session_start() {
     local memory_prompt
     memory_prompt="$(__ai_mem_context_prompt "$project_note" "$previous_session_note" "$session_note")"
 
-    local graphify_context=""
-    graphify_context="$(__ai_mem_graphify_context)" || return 1
-    if [[ -n "$graphify_context" ]]; then
-        memory_prompt+=$'\n\n'
-        memory_prompt+="$graphify_context"
-    fi
-
-    if [[ -n "$mode_block" ]]; then
+    # OMP receives the selected skill files through its system-prompt channel;
+    # do not duplicate the short picker blocks in its opening user message,
+    # where OMP can mistake names such as "caveman skill" for skill:// refs.
+    if [[ -n "$mode_block" && "$launcher" != omp ]]; then
         memory_prompt+=$'\n\n'
         memory_prompt+="$mode_block"
     fi
     if [[ -n "$session_prompt" ]]; then
         memory_prompt+=$'\n\n'
         memory_prompt+="$session_prompt"
+    fi
+    # A task for the whole session (e.g. the ai-about-me interview). It rides
+    # in the opening message only: adapters also forward "$@" as CLI args,
+    # so passing it as an argument would send it twice to some harnesses.
+    if [[ -n "${AI_MEM_SESSION_TASK:-}" ]]; then
+        memory_prompt+=$'\n\n'
+        memory_prompt+="$AI_MEM_SESSION_TASK"
+    else
+        __ai_mem_about_me_hint
     fi
 
     __ai_mem_mark_commit_ready "$active_project" "$launcher-start" || return 1
@@ -879,12 +1022,14 @@ __ai_session_start() {
     "__ai_adapter_$launcher" "$memory_prompt" "$mode_block" "$@"
 }
 
-# Load the agent adapters, then generate a <name>-start launcher for every
-# registered agent that has a matching adapter. Users extend by appending to
-# AI_MEM_AGENTS (space-separated) and defining __ai_adapter_<name>.
+# Load the harness adapters, then generate a <name>-start launcher for every
+# registered harness that has a matching adapter. AI_MEM_HARNESSES is preferred;
+# AI_MEM_AGENTS remains a compatibility alias for existing installs.
 source "$AI_MEM_HOME/adapters.zsh"
-: "${AI_MEM_AGENTS:=claude codex agy gemini cursor opencode}"
-for _ai_agent in ${(z)AI_MEM_AGENTS}; do
+: "${AI_MEM_HARNESSES:=${AI_MEM_AGENTS:-claude codex agy gemini cursor opencode omp}}"
+export AI_MEM_HARNESSES
+export AI_MEM_AGENTS="$AI_MEM_HARNESSES"
+for _ai_agent in ${(z)AI_MEM_HARNESSES}; do
     if typeset -f "__ai_adapter_$_ai_agent" >/dev/null; then
         # A same-named alias (e.g. from another plugin) makes zsh refuse to
         # `eval` a function definition of that name at all -- "defining

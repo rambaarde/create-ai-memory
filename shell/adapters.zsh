@@ -95,8 +95,128 @@ __ai_adapter_opencode() {
     opencode --prompt "$memory_prompt"
 }
 
-# --- Example: add another agent by defining its adapter and listing it in
-# AI_MEM_AGENTS. aider takes the initial instruction via --message:
+# omp (Oh My Pi): grant the TUI direct vault access, keep the memory context as
+# the opening message, and put selected session skills in OMP's system prompt
+# channel so they have higher authority than ordinary prompt text. Do not use
+# -p/--print here; that is one-shot mode.
+__ai_omp_model_selector() {
+    local requested="${AI_MEM_REQUESTED_LAUNCHER:-omp}"
+    local configured="${AI_MEM_OMP_MODEL:-}"
+    local mapped="${AI_MEM_OMP_MODELS[$requested]:-}"
+    if [[ -n "$mapped" ]]; then
+        print -r -- "$mapped"
+        return 0
+    fi
+    if [[ -n "$configured" ]]; then
+        print -r -- "$configured"
+        return 0
+    fi
+    if [[ -r "$HOME/.omp/agent/config.yml" ]]; then
+        sed -n 's/^[[:space:]]*default:[[:space:]]*//p' "$HOME/.omp/agent/config.yml" | sed -n '1p'
+    fi
+}
+
+__ai_omp_provider_args() {
+    local requested="${AI_MEM_REQUESTED_LAUNCHER:-omp}"
+    [[ "$requested" == omp ]] && return 0
+    local provider="${AI_MEM_OMP_PROVIDERS[$requested]:-$requested}"
+    local model="${AI_MEM_OMP_MODELS[$requested]:-}"
+    print -r -- "--provider"
+    print -r -- "$provider"
+    if [[ -n "$model" ]]; then
+        print -r -- "--model"
+        print -r -- "$model"
+    fi
+}
+
+__ai_omp_usage_snapshot() {
+    [[ "${AI_MEM_OMP_SHOW_USAGE:-1}" != 0 ]] || return 0
+    local usage_snapshot
+    usage_snapshot="$(omp usage --redact 2>/dev/null)" || return 0
+    [[ -n "$usage_snapshot" ]] || return 0
+    print -r -- "ai-memory: OMP provider usage (weekly/account limits):"
+    print -r -- "$usage_snapshot"
+}
+
+__ai_omp_skill_instructions() {
+    local modes="$1" key skill_file skill_root text block=""
+    for key in ${(s:|:)modes}; do
+        skill_file=""
+        for skill_root in "$HOME/.codex/skills" "$HOME/.agents/skills"; do
+            if [[ -f "$skill_root/$key/SKILL.md" ]]; then
+                skill_file="$skill_root/$key/SKILL.md"
+                break
+            fi
+        done
+
+        if [[ -n "$skill_file" ]]; then
+            block+=$'\n--- local skill '
+            block+="$key"
+            block+=$' (already loaded locally; do not look up in OMP registry) ---\n'
+            block+="$(<"$skill_file")"
+            block+=$'\n--- end local skill '
+            block+="$key"
+            block+=$' ---\n'
+        else
+            text="${AI_MEM_SKILLS[$key]#*::}"
+            [[ -n "$text" ]] || continue
+            block+=$'\n--- local session instruction '
+            block+="$key"
+            block+=$' (already loaded locally; do not look up in OMP registry) ---\n'
+            block+="$text"
+            block+=$'\n--- end local session instruction '
+            block+="$key"
+            block+=$' ---\n'
+        fi
+    done
+    print -r -- "$block"
+}
+
+__ai_adapter_omp() {
+    local memory_prompt="$1" mode_block="$2"
+    shift 2 2>/dev/null || true
+    local system_prompt model_selector arg previous_arg="" loaded_skills="" provider_args=()
+    provider_args=( ${(f)"$(__ai_omp_provider_args)"} )
+    model_selector="$(__ai_omp_model_selector)"
+    for arg in "$@"; do
+        if [[ "$arg" == --model=* ]]; then
+            model_selector="${arg#--model=}"
+        elif [[ "$previous_arg" == --model ]]; then
+            model_selector="$arg"
+        fi
+        previous_arg="$arg"
+    done
+    if [[ -n "$model_selector" ]]; then
+        print -r -- "ai-memory: OMP provider/model: $model_selector" >&2
+    else
+        print -r -- "ai-memory: OMP provider/model: OMP default (not resolved)" >&2
+    fi
+    __ai_omp_usage_snapshot >&2
+    loaded_skills="$(__ai_omp_skill_instructions "${AI_SESSION_MODES:-}")"
+    [[ -n "$loaded_skills" ]] || loaded_skills="$mode_block"
+    system_prompt="You are running inside an ai-memory session. The vault is available at $AI_MEM_ROOT. Read the relevant project and session notes when the user gives a task. The local skill and instruction contents below are already loaded. Do not search OMP's separate skill registry; apply these instructions directly. Wait for the user's task before taking action."
+    if [[ -n "$model_selector" ]]; then
+        system_prompt+=$'\nCurrent provider/model selector: '
+        system_prompt+="$model_selector"
+    fi
+    local ai_mem_bin="${AI_MEM_HOME:h}/bin"
+    if [[ -x "$ai_mem_bin/ai-mem-search" ]]; then
+        export PATH="$ai_mem_bin:$PATH"
+        system_prompt+=$'\nUse the executable ai-mem-search for vault searches. Do not glob or read session-log files directly when answering memory questions; use ai-mem-search so project scope, archived-log filtering, ranking, and output limits remain correct.'
+    fi
+    if command -v ai-internet-search >/dev/null 2>&1; then
+        system_prompt+=$'\nUse ai-internet-search automatically for explicit web research and current or uncertain external facts. Do not substitute raw web-search guesses when this CLI is available.'
+    fi
+    if [[ -n "$mode_block" ]]; then
+        system_prompt+=$'\n\nActive local skill instructions:\n'
+        system_prompt+="$loaded_skills"
+    fi
+    omp --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" \
+        $provider_args "$memory_prompt" "$@"
+}
+
+# --- Example: add another harness by defining its adapter and listing it in
+# AI_MEM_HARNESSES. aider takes the initial instruction via --message:
 # __ai_adapter_aider() {
 #     local memory_prompt="$1"
 #     aider --message "$memory_prompt"
