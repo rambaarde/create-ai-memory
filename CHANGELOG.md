@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.16.0](https://github.com/rambaarde/create-ai-memory/compare/v0.15.4...v0.16.0) (2026-09-25)
+
+
+### Features
+
+* **memory:** add _about_me notes and ai-about-me interview ([2025699](https://github.com/rambaarde/create-ai-memory/commit/20256992c4a17535cb65d3ac0f5b3396c2e47e02))
+* **memory:** add _about_me profile notes and ai-about-me interview ([b278769](https://github.com/rambaarde/create-ai-memory/commit/b278769530fc489c978be460e5584291d90291fd))
+* **memory:** promote about-me profile and omp routing ([b53e5e9](https://github.com/rambaarde/create-ai-memory/commit/b53e5e95a55b4acc806390bebf30bc23ce797b79))
+* **omp:** tell omp sessions to use ai-internet-search ([49a7290](https://github.com/rambaarde/create-ai-memory/commit/49a72907f1e5b583eeff18c639898b86cb61a95a))
+* **vault:** ship _about_me templates for rules and wants ([61dbfab](https://github.com/rambaarde/create-ai-memory/commit/61dbfabca2b86a6c9b2380f6f85da34873a549af))
+* **vault:** ship remaining _about_me templates and install them ([81b7c8f](https://github.com/rambaarde/create-ai-memory/commit/81b7c8f94efd7fdfd4c335d2d725249bfe8d2bcd))
+
+
+### Bug Fixes
+
+* **graph:** hide archived notes from index ([4695702](https://github.com/rambaarde/create-ai-memory/commit/4695702db785bd4568f6f0ee7e581f2a10af524c))
+* **graph:** hide archived notes from index ([b9953af](https://github.com/rambaarde/create-ai-memory/commit/b9953af9913cf4f755fb040d827f82296c9baa7e))
+* **mcp:** enforce GUI memory context ([2d7f687](https://github.com/rambaarde/create-ai-memory/commit/2d7f6876111b46af400c15b7c3b81a4023f92db2))
+* **mcp:** enforce GUI memory context ([2de7866](https://github.com/rambaarde/create-ai-memory/commit/2de78668baddde63d467159811cbf8e256dac1b9))
+* **omp:** load memory search and manual skills ([683ad63](https://github.com/rambaarde/create-ai-memory/commit/683ad636151144cf67d28baf25532de5b4c9e932))
+* **omp:** route providers by launcher ([5eac938](https://github.com/rambaarde/create-ai-memory/commit/5eac9388e7aaabb2a2285884d3cc68dbc4c95046))
+* **omp:** route providers by launcher and load memory search ([7571559](https://github.com/rambaarde/create-ai-memory/commit/7571559527e6627b09afc2074bc81a8e1a8a11ae))
+* **shell:** stop test suite writing to the real ~/.zshrc ([9cb5aa2](https://github.com/rambaarde/create-ai-memory/commit/9cb5aa2b03a267d2b3befa4c9aa1cdffe5e1d513))
+* **shell:** stop test suite writing to the real ~/.zshrc ([ac5d8fd](https://github.com/rambaarde/create-ai-memory/commit/ac5d8fd4473db697a56a45bc8e8f569bbb294250))
+* **shell:** stop test suite writing to the real ~/.zshrc ([108b57b](https://github.com/rambaarde/create-ai-memory/commit/108b57b1f30945f27323e6432194f02ffc673c5b))
+
 ## [0.15.4](https://github.com/rambaarde/create-ai-memory/compare/v0.15.3...v0.15.4) (2026-09-19)
 
 
