@@ -1043,6 +1043,34 @@ else
   nok "MCP initialize creates the GUI global session log before any tool call"
 fi
 
+# GUI clients prime a session on initialize and then call get_context before
+# almost every answer. Each call used to stamp a new empty global log.
+# :A resolves /var -> /private/var on macOS, so the path guard sees the same
+# prefix for the vault root and the GUI session directory.
+REUSEVAULT="$(mktemp -d)"; REUSEVAULT="${REUSEVAULT:A}/_Ai_Memory"
+AI_MEM_ROOT="$REUSEVAULT" "$REPO_ROOT/install.sh" >/dev/null
+{
+  print -r -- '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
+  print -r -- '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
+  print -r -- '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
+} | AI_MEM_ROOT="$REUSEVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" >/dev/null 2>&1
+REUSE_LOGS=("$REUSEVAULT/_globalize_mem/_session_logs"/_globalize_mem-*.md(N))
+is "$#REUSE_LOGS" "1" "MCP initialize plus repeated get_context leave one blank global log, not one per call"
+
+GLOBAL_PREP='source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; __ai_mem_prepare_session'
+global_prep() {
+  AI_MEM_ROOT="$REUSEVAULT" AI_MEM_FORCE_PROJECT=_globalize_mem AI_MEM_GLOBAL_SESSION=1 \
+    AI_MEM_GLOBALIZE_ROOT="$REUSEVAULT/_globalize_mem" zsh -c "$GLOBAL_PREP" | cut -d'|' -f4
+}
+REUSE_FIRST="$(global_prep)"
+is "$REUSE_FIRST" "$REUSE_LOGS[1]" "a GUI context read reuses the blank global log"
+print -rl -- "" "### Live Notes" "" "- 10:00 real work" >> "$REUSE_FIRST"
+REUSE_NEXT="$(global_prep)"
+[[ -n "$REUSE_NEXT" && "$REUSE_NEXT" != "$REUSE_FIRST" ]] \
+  && ok "a global log with content is not reused; the next read starts a new one" \
+  || nok "a global log with content is not reused; the next read starts a new one"
+has "$(<"$REUSE_NEXT")" "[[${REUSE_FIRST:t:r}]]" "the new global log links back to the one with content"
+
 MCP_OUT="$(mktemp)"
 # Run from inside a git repo so project resolution has something to resolve.
 ( cd "$WORK" && env -u AI_MEM_NOTE_MAX_CHARS AI_MEM_ROOT="$MCPVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" < "$MCP_IN" 2>/dev/null > "$MCP_OUT" )
