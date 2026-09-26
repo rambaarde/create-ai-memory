@@ -1064,6 +1064,12 @@ global_prep() {
 }
 REUSE_FIRST="$(global_prep)"
 is "$REUSE_FIRST" "$REUSE_LOGS[1]" "a GUI context read reuses the blank global log"
+# Give the filled log an old timestamp. A read in the SAME second as a log
+# with Live Notes reuses that log by design, so a current-second name would
+# make this test depend on the clock.
+REUSE_FILLED="${REUSE_FIRST:h}/_globalize_mem-2000-01-01_00-00-00.md"
+mv "$REUSE_FIRST" "$REUSE_FILLED"
+REUSE_FIRST="$REUSE_FILLED"
 print -rl -- "" "### Live Notes" "" "- 10:00 real work" >> "$REUSE_FIRST"
 REUSE_NEXT="$(global_prep)"
 [[ -n "$REUSE_NEXT" && "$REUSE_NEXT" != "$REUSE_FIRST" ]] \
