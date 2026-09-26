@@ -356,7 +356,7 @@ __ai_mem_latest_session_log() {
     latest="$(awk '
         FNR == 1 { fm = ($0 == "---"); if (fm) next }
         fm { if ($0 == "---") fm = 0; next }
-        /^[[:space:]]*$/ || $0 == "# Session Outcome" || /^\* \*\*[^*]+:\*\*[[:space:]]*\[.*\]$/ { next }
+        /^[[:space:]]*$/ || $0 == "# Session Outcome" || $0 == "# Global Session Notes" || /^\* \*\*[^*]+:\*\*[[:space:]]*\[.*\]$/ { next }
         { print FILENAME; exit }
     ' "${(@f)logs}" 2>/dev/null)" || true
     [[ -n "$latest" ]] || latest="${logs%%$'\n'*}"
@@ -364,6 +364,19 @@ __ai_mem_latest_session_log() {
         __ai_mem_guard "$latest" || return 1
         print -r -- "$latest"
     fi
+}
+
+# True when a global (GUI/MCP) session log holds nothing but its skeleton:
+# frontmatter, blank lines, and the "# Global Session Notes" heading. An
+# unreadable file counts as not blank, so the caller creates a new log.
+__ai_mem_global_log_is_blank() {
+    awk '
+        FNR == 1 { fm = ($0 == "---"); if (fm) next }
+        fm { if ($0 == "---") fm = 0; next }
+        /^[[:space:]]*$/ || $0 == "# Global Session Notes" { next }
+        { found = 1; exit }
+        END { exit found }
+    ' "$1" 2>/dev/null
 }
 
 # Copy the shipped profile, standards, and templates into the vault on first use.
@@ -472,11 +485,30 @@ __ai_mem_prepare_session() {
             "$AI_MEM_PROJECT_DIR/_project_template.md" > "$project_note"
     fi
 
+    # GUI clients start the MCP server (which primes a session on initialize)
+    # and then call get_context before almost every answer. Each of those used
+    # to stamp a new global log -- ~290 empty notes in a week, chained by
+    # `previous:` into a strand of junk in the graph. While the newest global
+    # log is still the untouched skeleton, hand that one out again. The first
+    # real write (ai-note, a session-log update) ends the reuse. The check sits
+    # after mkdir and just before the write, so a second call that arrives in
+    # the same second finds the first call's skeleton instead of racing it.
+    local reused=0
+    if (( global_session )); then
+        local -a newest
+        newest=("$project_session_dir/${project_name}"-*.md(N.On[1]))
+        if (( $#newest )) && __ai_mem_global_log_is_blank "$newest[1]"; then
+            session_note="$newest[1]"
+            reused=1
+            [[ "$previous_session_note" == "$session_note" ]] && previous_session_note=""
+        fi
+    fi
+
     # A blank note with this second's timestamp belongs to a separate session.
     # Wait for the next timestamp instead of overwriting its previous-session
     # link. A note with Live Notes is the active GUI/CLI session and must be
     # reused.
-    if [[ -f "$session_note" ]] && ! grep -q '^### Live Notes' "$session_note" 2>/dev/null; then
+    if (( ! reused )) && [[ -f "$session_note" ]] && ! grep -q '^### Live Notes' "$session_note" 2>/dev/null; then
         while [[ -f "$session_note" ]]; do
             sleep 1
             session_stamp="$(date +%Y-%m-%d_%H-%M-%S)"
