@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.1](https://github.com/rambaarde/create-ai-memory/compare/v0.16.0...v0.16.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **memory:** promote blank global session log reuse ([de689cc](https://github.com/rambaarde/create-ai-memory/commit/de689cc75cb3ed7d7a8682dee2090033a5583ae6))
+* **memory:** reuse a blank global session log for GUI context reads ([fc230c2](https://github.com/rambaarde/create-ai-memory/commit/fc230c2d16fd340402afdade03b91763884ef1e3))
+* **memory:** reuse a blank global session log for GUI context reads ([01b55d2](https://github.com/rambaarde/create-ai-memory/commit/01b55d2556b609f55e9509ae0bf9320de2bd0232))
+
 ## [0.16.0](https://github.com/rambaarde/create-ai-memory/compare/v0.15.4...v0.16.0) (2026-09-25)
 
 
