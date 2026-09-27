@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.1](https://github.com/rambaarde/create-ai-memory/compare/v0.16.0...v0.16.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **memory:** create global session logs on the first write ([4c23fc5](https://github.com/rambaarde/create-ai-memory/commit/4c23fc5fb44a1cfb11e74ad307e43839feb037d7))
+* **memory:** create global session logs on the first write ([32a586a](https://github.com/rambaarde/create-ai-memory/commit/32a586a4de59a78b257514612957581f5be07ca1))
+* **memory:** promote blank global session log reuse ([de689cc](https://github.com/rambaarde/create-ai-memory/commit/de689cc75cb3ed7d7a8682dee2090033a5583ae6))
+* **memory:** promote lazy global session logs ([142ca4c](https://github.com/rambaarde/create-ai-memory/commit/142ca4c325e4ea0c586a7abd1a10285079cb2e72))
+* **memory:** reuse a blank global session log for GUI context reads ([fc230c2](https://github.com/rambaarde/create-ai-memory/commit/fc230c2d16fd340402afdade03b91763884ef1e3))
+* **memory:** reuse a blank global session log for GUI context reads ([01b55d2](https://github.com/rambaarde/create-ai-memory/commit/01b55d2556b609f55e9509ae0bf9320de2bd0232))
+
 ## [0.16.0](https://github.com/rambaarde/create-ai-memory/compare/v0.15.4...v0.16.0) (2026-09-25)
 
 
