@@ -817,6 +817,11 @@ a standing brief (read context first, search before solving, write back after)
 -- without it a model has no reason to suspect a memory exists. Tool
 descriptions stay terse because schemas are re-sent every turn.
 
+A GUI session log is created by the first write, not by a read. Each MCP
+server keeps one log path for its lifetime; `add_note` (or an agent that
+writes the session outcome) creates the file there. A conversation that only
+reads context leaves no empty note in the vault.
+
 **Do not register this for a terminal agent.** Claude Code, Codex, Gemini and
 opencode have a shell and should call `ai-mem-search` directly.
 
