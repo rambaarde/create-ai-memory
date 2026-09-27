@@ -1025,57 +1025,56 @@ MCP_IN="$(mktemp)"
   print -r -- '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"search_memory","arguments":{"term":"written by a GUI client"}}}'
   print -r -- '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
 } > "$MCP_IN"
-INITVAULT="$(mktemp -d)/_Ai_Memory"
-AI_MEM_ROOT="$INITVAULT" "$REPO_ROOT/install.sh" >/dev/null
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
-  | AI_MEM_ROOT="$INITVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" >/dev/null 2>&1
-if find "$INITVAULT/_globalize_mem/_session_logs" -maxdepth 1 -type f -name '_globalize_mem-*.md' 2>/dev/null | grep -q .; then
-if [[ ! -e "$INITVAULT/_projects/_globalize_mem.md" ]] &&
-   GLOBAL_LOG="$(find "$INITVAULT/_globalize_mem/_session_logs" -maxdepth 1 -type f -name '_globalize_mem-*.md' -print -quit 2>/dev/null)" &&
-   grep -q '^type: ai-global-session$' "$GLOBAL_LOG" 2>/dev/null &&
-   ! grep -qE 'Insert Repo Root|Session Outcome|project:' "$GLOBAL_LOG" 2>/dev/null; then
-  ok "GUI global sessions stay compact and do not create a project note"
-else
-  nok "GUI global sessions stay compact and do not create a project note"
-fi
-  ok "MCP initialize creates the GUI global session log before any tool call"
-else
-  nok "MCP initialize creates the GUI global session log before any tool call"
-fi
-
-# GUI clients prime a session on initialize and then call get_context before
-# almost every answer. Each call used to stamp a new empty global log.
-# :A resolves /var -> /private/var on macOS, so the path guard sees the same
-# prefix for the vault root and the GUI session directory.
-REUSEVAULT="$(mktemp -d)"; REUSEVAULT="${REUSEVAULT:A}/_Ai_Memory"
-AI_MEM_ROOT="$REUSEVAULT" "$REPO_ROOT/install.sh" >/dev/null
+# GUI clients start the MCP server and call get_context before almost every
+# answer. A read must leave no file behind: ~290 empty global logs piled up
+# when every read wrote a skeleton. :A resolves /var -> /private/var on macOS,
+# so the path guard sees one prefix for the vault and the GUI session dir.
+LAZYVAULT="$(mktemp -d)"; LAZYVAULT="${LAZYVAULT:A}/_Ai_Memory"
+AI_MEM_ROOT="$LAZYVAULT" "$REPO_ROOT/install.sh" >/dev/null
+LAZY_DIR="$LAZYVAULT/_globalize_mem/_session_logs"
+LAZY_OUT="$(mktemp)"
 {
   print -r -- '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
   print -r -- '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
   print -r -- '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
-} | AI_MEM_ROOT="$REUSEVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" >/dev/null 2>&1
-REUSE_LOGS=("$REUSEVAULT/_globalize_mem/_session_logs"/_globalize_mem-*.md(N))
-is "$#REUSE_LOGS" "1" "MCP initialize plus repeated get_context leave one blank global log, not one per call"
+} | AI_MEM_ROOT="$LAZYVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" > "$LAZY_OUT" 2>/dev/null
+LAZY_LOGS=("$LAZY_DIR"/_globalize_mem-*.md(N))
+is "$#LAZY_LOGS" "0" "MCP initialize and get_context create no global session log"
+[[ ! -e "$LAZYVAULT/_projects/_globalize_mem.md" ]] \
+  && ok "GUI global sessions do not create a project note" \
+  || nok "GUI global sessions do not create a project note"
+has "$(<"$LAZY_OUT")" "not created yet" "get_context says the global log is created by the first write"
 
-GLOBAL_PREP='source "'"$REPO_ROOT"'/shell/ai-mem.zsh"; __ai_mem_prepare_session'
-global_prep() {
-  AI_MEM_ROOT="$REUSEVAULT" AI_MEM_FORCE_PROJECT=_globalize_mem AI_MEM_GLOBAL_SESSION=1 \
-    AI_MEM_GLOBALIZE_ROOT="$REUSEVAULT/_globalize_mem" zsh -c "$GLOBAL_PREP" | cut -d'|' -f4
-}
-REUSE_FIRST="$(global_prep)"
-is "$REUSE_FIRST" "$REUSE_LOGS[1]" "a GUI context read reuses the blank global log"
-# Give the filled log an old timestamp. A read in the SAME second as a log
-# with Live Notes reuses that log by design, so a current-second name would
-# make this test depend on the clock.
-REUSE_FILLED="${REUSE_FIRST:h}/_globalize_mem-2000-01-01_00-00-00.md"
-mv "$REUSE_FIRST" "$REUSE_FILLED"
-REUSE_FIRST="$REUSE_FILLED"
-print -rl -- "" "### Live Notes" "" "- 10:00 real work" >> "$REUSE_FIRST"
-REUSE_NEXT="$(global_prep)"
-[[ -n "$REUSE_NEXT" && "$REUSE_NEXT" != "$REUSE_FIRST" ]] \
-  && ok "a global log with content is not reused; the next read starts a new one" \
-  || nok "a global log with content is not reused; the next read starts a new one"
-has "$(<"$REUSE_NEXT")" "[[${REUSE_FIRST:t:r}]]" "the new global log links back to the one with content"
+# The first write creates the log at the path the server pinned, in the
+# compact global format, and later writes from the same server append to it.
+{
+  print -r -- '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
+  print -r -- '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_context","arguments":{}}}'
+  print -r -- '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_note","arguments":{"text":"first GUI note"}}}'
+  print -r -- '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"add_note","arguments":{"text":"second GUI note"}}}'
+} | AI_MEM_ROOT="$LAZYVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" > "$LAZY_OUT" 2>/dev/null
+LAZY_LOGS=("$LAZY_DIR"/_globalize_mem-*.md(N))
+is "$#LAZY_LOGS" "1" "one MCP server writes its notes to one global session log"
+LAZY_PINNED="$(grep -oE 'Active session log: [^ \\"]+\.md' "$LAZY_OUT" | head -1)"
+is "${LAZY_LOGS[1]:-}" "${LAZY_PINNED#Active session log: }" "the first write creates the log at the path get_context reported"
+LAZY_BODY="$(<"${LAZY_LOGS[1]:-/dev/null}")"
+has   "$LAZY_BODY" "first GUI note"             "the global log holds the first note"
+has   "$LAZY_BODY" "second GUI note"            "the global log holds the second note"
+has   "$LAZY_BODY" "type: ai-global-session"    "the global log uses the compact global type"
+hasnt "$LAZY_BODY" "Session Outcome"            "the global log does not use the repository template"
+
+# A new server links its log to the newest log with content. The old log is
+# renamed to an old timestamp so the new server can never pin the same second.
+LAZY_OLD="$LAZY_DIR/_globalize_mem-2000-01-01_00-00-00.md"
+mv "$LAZY_LOGS[1]" "$LAZY_OLD"
+{
+  print -r -- '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
+  print -r -- '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_note","arguments":{"text":"third GUI note"}}}'
+} | AI_MEM_ROOT="$LAZYVAULT" node "$REPO_ROOT/bin/ai-mem-mcp.js" >/dev/null 2>&1
+LAZY_NEW=("$LAZY_DIR"/_globalize_mem-*.md(N)); LAZY_NEW=(${LAZY_NEW:#$LAZY_OLD})
+is  "$#LAZY_NEW" "1" "a second server's first write creates its own global log"
+has "$(<"${LAZY_NEW[1]:-/dev/null}")" "[[_globalize_mem-2000-01-01_00-00-00]]" "the new global log links back to the log with content"
+rm -f "$LAZY_OUT"
 
 MCP_OUT="$(mktemp)"
 # Run from inside a git repo so project resolution has something to resolve.

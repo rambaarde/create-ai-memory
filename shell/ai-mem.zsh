@@ -366,19 +366,6 @@ __ai_mem_latest_session_log() {
     fi
 }
 
-# True when a global (GUI/MCP) session log holds nothing but its skeleton:
-# frontmatter, blank lines, and the "# Global Session Notes" heading. An
-# unreadable file counts as not blank, so the caller creates a new log.
-__ai_mem_global_log_is_blank() {
-    awk '
-        FNR == 1 { fm = ($0 == "---"); if (fm) next }
-        fm { if ($0 == "---") fm = 0; next }
-        /^[[:space:]]*$/ || $0 == "# Global Session Notes" { next }
-        { found = 1; exit }
-        END { exit found }
-    ' "$1" 2>/dev/null
-}
-
 # Copy the shipped profile, standards, and templates into the vault on first use.
 # Idempotent and additive: it never overwrites a file the user already has, so a
 # plugin-manager install (source only, no install.sh) still gets a working vault.
@@ -485,49 +472,38 @@ __ai_mem_prepare_session() {
             "$AI_MEM_PROJECT_DIR/_project_template.md" > "$project_note"
     fi
 
-    # GUI clients start the MCP server (which primes a session on initialize)
-    # and then call get_context before almost every answer. Each of those used
-    # to stamp a new global log -- ~290 empty notes in a week, chained by
-    # `previous:` into a strand of junk in the graph. While the newest global
-    # log is still the untouched skeleton, hand that one out again. The first
-    # real write (ai-note, a session-log update) ends the reuse. The check sits
-    # after mkdir and just before the write, so a second call that arrives in
-    # the same second finds the first call's skeleton instead of racing it.
-    local reused=0
-    if (( global_session )); then
-        local -a newest
-        newest=("$project_session_dir/${project_name}"-*.md(N.On[1]))
-        if (( $#newest )) && __ai_mem_global_log_is_blank "$newest[1]"; then
-            session_note="$newest[1]"
-            reused=1
-            [[ "$previous_session_note" == "$session_note" ]] && previous_session_note=""
-        fi
-    fi
-
-    # A blank note with this second's timestamp belongs to a separate session.
-    # Wait for the next timestamp instead of overwriting its previous-session
-    # link. A note with Live Notes is the active GUI/CLI session and must be
-    # reused.
-    if (( ! reused )) && [[ -f "$session_note" ]] && ! grep -q '^### Live Notes' "$session_note" 2>/dev/null; then
-        while [[ -f "$session_note" ]]; do
-            sleep 1
-            session_stamp="$(date +%Y-%m-%d_%H-%M-%S)"
-            session_note="$project_session_dir/${project_name}-${session_stamp}.md"
-        done
-    fi
-
     local prev_link=""
     if [[ -n "$previous_session_note" ]]; then
         prev_link="[[${previous_session_note:t:r}]]"
     fi
 
-    # Context reads can follow a GUI write in the same second. Reusing an
-    # existing timestamped note preserves Live Notes and any other append.
-    if [[ ! -f "$session_note" ]]; then
-        if (( global_session )); then
-            local session_date="$(date +%Y-%m-%d)"
-            print -rl -- "---" "type: ai-global-session" "date: $session_date" "previous: \"$prev_link\"" "---" "" "# Global Session Notes" > "$session_note"
-        else
+    if (( global_session )); then
+        # GUI clients start the MCP server (initialize reads context) and then
+        # call get_context before almost every answer. Writing a skeleton on
+        # each read left ~290 empty notes in a week, chained into a strand of
+        # junk in the graph. So a global log is only a PATH here: the MCP
+        # server pins it in AI_MEM_ACTIVE_SESSION_LOG for its lifetime, and
+        # the file is created by the first write (ai-note, or an agent that
+        # writes the session outcome). A read-only conversation leaves nothing.
+        local active="${AI_MEM_ACTIVE_SESSION_LOG:-}"
+        if [[ "$active" == "$project_session_dir/${project_name}-$(date +%Y-%m-%d)_"*.md ]]; then
+            session_note="$active"
+        fi
+    else
+        # A blank note with this second's timestamp belongs to a separate
+        # session. Wait for the next timestamp instead of overwriting its
+        # previous-session link. A note with Live Notes is the active CLI
+        # session and must be reused.
+        if [[ -f "$session_note" ]] && ! grep -q '^### Live Notes' "$session_note" 2>/dev/null; then
+            while [[ -f "$session_note" ]]; do
+                sleep 1
+                session_stamp="$(date +%Y-%m-%d_%H-%M-%S)"
+                session_note="$project_session_dir/${project_name}-${session_stamp}.md"
+            done
+        fi
+        # Context reads can follow a write in the same second. Reusing an
+        # existing timestamped note preserves Live Notes and any other append.
+        if [[ ! -f "$session_note" ]]; then
             SESSION_DATE="$(date +%Y-%m-%d)" PROJECT_NAME="$project_name" PREV_LINK="$prev_link" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g; s/\{\{previous_session_link\}\}/$ENV{PREV_LINK}/g' \
                 "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"
         fi
@@ -775,6 +751,13 @@ __ai_mem_context_prompt() {
     fi
     local project_label="$project_note"
     [[ -n "$project_label" ]] || project_label="none (GUI/MCP global memory; no repository context)"
+    # A global (GUI/MCP) log is created on the first write, so its path may
+    # not exist yet. Say so; an agent that tries to read it would otherwise
+    # take "not found" for an error.
+    local session_state=""
+    if [[ -n "$session_note" && ! -e "$session_note" ]]; then
+        session_state=" -- not created yet; the first ai-note or session-log write creates it at this path"
+    fi
     # Hard "no"s go first: models follow early instructions most reliably,
     # and the note cap truncates from the end. The index sits with the other
     # pointers. Each block carries its own trailing newline so an absent
@@ -795,7 +778,7 @@ $(__ai_mem_note_contents "$AI_MEM_STANDARDS")
 
 ${about_index}- Project context: $project_label$project_state
 $previous_session_block
-- Active session log: $session_note
+- Active session log: $session_note$session_state
 $(__ai_mem_lesson_index)
 
 Use the Obsidian vault as the persistent memory layer.
@@ -1077,6 +1060,19 @@ __ai_mem_current_project() {
     __ai_mem_resolve_project
 }
 
+# Create a global (GUI/MCP) session log at $1 if it does not exist yet. Global
+# logs are created lazily, on the first write, so a read-only conversation
+# leaves no empty note behind. `previous:` links the newest log with content.
+__ai_mem_create_global_log() {
+    local session_note="$1" project_name="$2" previous prev_link=""
+    [[ -f "$session_note" ]] && return 0
+    __ai_mem_guard "$session_note" || return 1
+    previous="$(__ai_mem_latest_session_log "$project_name")" || return 1
+    [[ -n "$previous" ]] && prev_link="[[${previous:t:r}]]"
+    mkdir -p "${session_note:h}"
+    print -rl -- "---" "type: ai-global-session" "date: $(date +%Y-%m-%d)" "previous: \"$prev_link\"" "---" "" "# Global Session Notes" > "$session_note"
+}
+
 __ai_mem_today_session_log() {
     __ai_mem_paths
     local project_name="${1:-}"
@@ -1091,10 +1087,18 @@ __ai_mem_today_session_log() {
     local project_session_dir
     project_session_dir="$(__ai_mem_project_session_dir "$project_name")"
 
-    if [[ -n "${AI_MEM_ACTIVE_SESSION_LOG:-}" && -f "$AI_MEM_ACTIVE_SESSION_LOG" ]]; then
+    local global_session=0
+    [[ "${AI_MEM_GLOBAL_SESSION:-}" == "1" ]] && global_session=1
+
+    # A global session's path is pinned by the MCP server before the file
+    # exists; the first write creates it there.
+    if [[ -n "${AI_MEM_ACTIVE_SESSION_LOG:-}" ]] && { (( global_session )) || [[ -f "$AI_MEM_ACTIVE_SESSION_LOG" ]]; }; then
         case "$AI_MEM_ACTIVE_SESSION_LOG" in
             "$AI_MEM_ROOT"|"$AI_MEM_ROOT"/*)
-                if [[ "$AI_MEM_ACTIVE_SESSION_LOG" == "$project_session_dir/${project_name}-${today}_"* ]]; then
+                if [[ "$AI_MEM_ACTIVE_SESSION_LOG" == "$project_session_dir/${project_name}-${today}_"*.md ]]; then
+                    if (( global_session )); then
+                        __ai_mem_create_global_log "$AI_MEM_ACTIVE_SESSION_LOG" "$project_name" || return 1
+                    fi
                     print -r -- "$AI_MEM_ACTIVE_SESSION_LOG"
                     return 0
                 fi
@@ -1115,6 +1119,11 @@ __ai_mem_today_session_log() {
 
     local session_note="$project_session_dir/${project_name}-${today}_$(date +%H-%M-%S).md"
     __ai_mem_guard "$session_note" || return 1
+    if (( global_session )); then
+        __ai_mem_create_global_log "$session_note" "$project_name" || return 1
+        print -r -- "$session_note"
+        return 0
+    fi
     mkdir -p "$project_session_dir"
     SESSION_DATE="$today" PROJECT_NAME="$project_name" perl -0pe 's/\{\{date\}\}/$ENV{SESSION_DATE}/g; s/\{\{project_name\}\}/$ENV{PROJECT_NAME}/g' \
         "$AI_MEM_SESSION_DIR/_session_template.md" > "$session_note"

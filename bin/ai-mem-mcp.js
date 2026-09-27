@@ -44,6 +44,22 @@ const VERSION = (() => {
 })();
 
 /**
+ * The global session log this server writes to, pinned for its lifetime.
+ *
+ * Every zsh call is a fresh process, so the path the module picks on
+ * `initialize` would be lost by the next call. Pinning it keeps one server
+ * on one log. The file itself is created by the first write, so a
+ * conversation that only reads leaves no empty note in the vault.
+ */
+let sessionLog = '';
+
+/** Remember the "Active session log" path from an ai-context result. */
+function pinSessionLog(text) {
+  const m = /^- Active session log: (.+?\.md)(?: -- |$)/m.exec(text || '');
+  if (m) sessionLog = m[1];
+}
+
+/**
  * Run a zsh snippet with the module sourced, and return its output.
  *
  * stderr is kept separate and only surfaced when the call fails: sourcing the
@@ -65,6 +81,9 @@ function zsh(snippet) {
       AI_MEM_FORCE_PROJECT: GUI_PROJECT,
       AI_MEM_GLOBALIZE_ROOT: GUI_ROOT,
       AI_MEM_GLOBAL_SESSION: '1',
+      // Always set, so a project log exported by a parent *-start shell is
+      // never mistaken for this GUI session.
+      AI_MEM_ACTIVE_SESSION_LOG: sessionLog,
     },
     maxBuffer: 8 * 1024 * 1024,
   });
@@ -220,8 +239,12 @@ function callTool(name, args = {}) {
   switch (name) {
     case 'search_memory':
       return zsh(`ai-mem-search ${q(args.term)} ${args.project ? q(args.project) : ''}`);
-    case 'get_context':
-      return zsh(`ai-context ${q(args.project || GUI_PROJECT)}`);
+    case 'get_context': {
+      const project = args.project || GUI_PROJECT;
+      const result = zsh(`ai-context ${q(project)}`);
+      if (result.ok && project === GUI_PROJECT) pinSessionLog(result.text);
+      return result;
+    }
     // ai-note and ai-lesson both push the vault themselves, so a GUI write is
     // committed and backed up exactly like a terminal one -- no separate step
     // for the model to forget.
@@ -267,9 +290,10 @@ function handle(req) {
   if (id === undefined) return;
 
   if (method === 'initialize') {
-    // Initialize is the GUI equivalent of a CLI launcher: create the globalized
-    // session log even if the model never remembers to call a tool first.
-    zsh(`ai-context ${q(GUI_PROJECT)} >/dev/null && print -r -- primed`);
+    // Initialize is the GUI equivalent of a CLI launcher: load the context and
+    // pin this server's global session log even if the model never calls a
+    // tool first. The log file is created by the first write, not here.
+    pinSessionLog(zsh(`ai-context ${q(GUI_PROJECT)}`).text);
     return send({
       jsonrpc: '2.0',
       id,
