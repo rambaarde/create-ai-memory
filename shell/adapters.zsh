@@ -204,8 +204,10 @@ __ai_adapter_omp() {
         export PATH="$ai_mem_bin:$PATH"
         system_prompt+=$'\nUse the executable ai-mem-search for vault searches. Do not glob or read session-log files directly when answering memory questions; use ai-mem-search so project scope, archived-log filtering, ranking, and output limits remain correct.'
     fi
+    # Research uses two sources: the ai-internet-search CLI for the authoritative
+    # core and the harness's built-in web search for breadth.
     if command -v ai-internet-search >/dev/null 2>&1; then
-        system_prompt+=$'\nUse ai-internet-search automatically for explicit web research and current or uncertain external facts. Do not substitute raw web-search guesses when this CLI is available.'
+        system_prompt+=$'\nFor explicit web research and current or uncertain external facts, use two sources every time: run ai-internet-search for the authoritative core, and run the built-in web search for breadth. Tell the user which facts came from each source.'
     fi
     if [[ -n "$mode_block" ]]; then
         system_prompt+=$'\n\nActive local skill instructions:\n'
