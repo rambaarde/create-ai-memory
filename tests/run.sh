@@ -185,6 +185,32 @@ EOF
 unfilled_ctx="$(__ai_mem_context_prompt "$project_note" "$UNFILLEDLOG" "$session_note")"
 has   "$unfilled_ctx" "Read the latest prior session log for continuity" "an untouched template's bracket placeholders fall back to the read instruction"
 hasnt "$unfilled_ctx" "What changed or was decided"                     "bracket placeholder text is never inlined as if it were real content"
+
+# A field written as a bare label with nested bullets under it must inline
+# those bullets. Reading only the label line showed "—", which tells the next
+# agent there were no decisions when the log held a list of them.
+NESTEDLOG="$AI_MEM_SESSION_DIR/demoproj/demoproj-2026-08-22_10-00-00.md"
+cat > "$NESTEDLOG" <<'EOF'
+# Session Outcome
+* **High-Level Summary:** shipped the cache
+  - also fixed the menu
+* **Important Decisions:**
+  - keep footer config additive
+    - unset means today's footer
+
+  - audits stay view-only
+* **Constraints / Blockers:** none
+* **Next Step:** promote develop
+
+# Work log
+  - indented line after a heading is not part of any field
+EOF
+nested_ctx="$(__ai_mem_context_prompt "$project_note" "$NESTEDLOG" "$session_note")"
+has   "$nested_ctx" "**Decisions:** keep footer config additive; unset means today's footer; audits stay view-only" \
+  "nested bullets under a bare label are inlined, blank lines inside the list included"
+has   "$nested_ctx" "**Summary:** shipped the cache; also fixed the menu" "nested bullets after an inline value are appended"
+has   "$nested_ctx" "**Blockers:** none"                                "the next top-level bullet ends the previous field"
+hasnt "$nested_ctx" "indented line after a heading"                     "a heading ends the field even if indented lines follow"
 # --- 5. commit-ready token is written and matches the shell -------------------
 token_file="$AI_MEM_ROOT/_session_logs/.context-ready/demoproj.token"
 exists "$token_file"                                       "ai-context writes the commit-ready token file"

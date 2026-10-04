@@ -519,10 +519,38 @@ __ai_mem_prepare_session() {
 # Pull one "* **Label:** value" bullet out of a session log's fixed
 # "# Session Outcome" section. Reads the log directly — no separate file is
 # ever written, so there is nothing extra sitting in the vault.
+#
+# Indented lines under the bullet belong to it and are joined with "; ".
+# Agents often write a field as a bare label with nested bullets; reading
+# only the label line returned "", the digest showed "—", and the next agent
+# was told there were no decisions when the log held a list of them (140 of
+# 407 logs on a real vault). Blank lines inside the list are skipped; the
+# first non-blank, non-indented line (next bullet or heading) ends the field.
 __ai_mem_session_field() {
     local file="$1" label="$2" value
     [[ -f "$file" ]] || return 0
-    value="$(grep -m1 -E "^\* \*\*${label}:\*\*" "$file" | sed -E "s|^\* \*\*${label}:\*\*[[:space:]]*||")"
+    value="$(awk -v prefix="* **${label}:**" '
+        !found {
+            if (index($0, prefix) == 1) {
+                found = 1
+                v = substr($0, length(prefix) + 1)
+                sub(/^[[:space:]]+/, "", v)
+            }
+            next
+        }
+        /^[[:space:]]*$/ { next }
+        /^[[:space:]]/ {
+            item = $0
+            sub(/^[[:space:]]+([-*+][[:space:]]+)?/, "", item)
+            # An item that already ends a sentence needs no extra "; ".
+            if (v == "") v = item
+            else if (v ~ /[.;:!?]$/) v = v " " item
+            else v = v "; " item
+            next
+        }
+        { exit }
+        END { if (found) print v }
+    ' "$file")"
     # An untouched template still has its literal [bracket] placeholder — that
     # is not real content, so treat it the same as an empty field.
     [[ "$value" == \[*\] ]] && return 0
