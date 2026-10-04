@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.16.2](https://github.com/rambaarde/create-ai-memory/compare/v0.16.1...v0.16.2) (2026-10-04)
+
+
+### Bug Fixes
+
+* **digest:** read nested bullets in session outcome fields ([30d8edb](https://github.com/rambaarde/create-ai-memory/commit/30d8edb1be40b4a8d41f414ac9729bdffad682f0))
+* **digest:** read nested bullets in session outcome fields ([abea350](https://github.com/rambaarde/create-ai-memory/commit/abea3502bef04ed2398adfd33d2b3772fcb5cfe0))
+* **memory:** promote digest nested-bullet fix and two-source research ([ff6e02f](https://github.com/rambaarde/create-ai-memory/commit/ff6e02faa8143723ce48b4cd8cb2481635bdbee8))
+* **omp:** tell the agent to use two sources for web research ([c973e46](https://github.com/rambaarde/create-ai-memory/commit/c973e466066176cf0475b0e138503e60adcd7241))
+* **omp:** tell the agent to use two sources for web research ([b8abb87](https://github.com/rambaarde/create-ai-memory/commit/b8abb87fd0d433331ee75822b6399e71e04c911d))
+
 ## [0.16.1](https://github.com/rambaarde/create-ai-memory/compare/v0.16.0...v0.16.1) (2026-09-27)
 
 
