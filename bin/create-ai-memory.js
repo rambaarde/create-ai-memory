@@ -10,6 +10,7 @@
  * Usage:
  *   npm create ai-memory@latest              # into ~/ai-memory
  *   npx create-ai-memory ~/code/ai-memory    # into a directory you choose
+ *   npx create-ai-memory --version | --help
  */
 'use strict';
 
@@ -19,7 +20,29 @@ const { join, resolve } = require('node:path');
 const { homedir } = require('node:os');
 
 const pkgRoot = resolve(__dirname, '..');                       // bundled tool
-const dest = resolve(process.argv[2] || join(homedir(), 'ai-memory'));
+const USAGE = 'Usage: create-ai-memory [install-dir]   (default: ~/ai-memory)\n' +
+              '       create-ai-memory --version | --help';
+
+// Flags are handled before anything touches the disk. The first argument used
+// to be taken as the install directory unconditionally, so `--version` created
+// ./--version and ran the interactive installer inside it. Any other leading
+// dash is rejected rather than guessed at: a directory name starting with `-`
+// can still be passed as ./-name.
+const arg = process.argv[2];
+if (arg === '--version' || arg === '-v') {
+  console.log(require(join(pkgRoot, 'package.json')).version);
+  process.exit(0);
+}
+if (arg === '--help' || arg === '-h') {
+  console.log(USAGE);
+  process.exit(0);
+}
+if (arg && arg.startsWith('-')) {
+  console.error(`create-ai-memory: unknown option ${arg}\n${USAGE}`);
+  process.exit(2);
+}
+
+const dest = resolve(arg || join(homedir(), 'ai-memory'));
 
 // Files that make up the tool; copied verbatim from the package into dest.
 //
