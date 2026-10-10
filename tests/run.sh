@@ -1532,6 +1532,16 @@ for f in shell/ai-mem.zsh bin/ai-mem-serve.js bin/ai-mem-mcp.js web/viewer.html 
   exists "$NEWHOME/ai-memory/$f" "a fresh install ships $f"
 done
 
+# Flags must never be read as the install directory. `--version` used to
+# create ./--version and run the interactive installer inside it.
+FLAGCWD="$(mktemp -d)"
+FLAGVER="$(cd "$FLAGCWD" && HOME="$FLAGCWD" node "$REPO_ROOT/bin/create-ai-memory.js" --version </dev/null 2>&1)"
+is "$FLAGVER" "$(node -p "require('$REPO_ROOT/package.json').version")" "create-ai-memory --version prints the package version"
+( cd "$FLAGCWD" && HOME="$FLAGCWD" node "$REPO_ROOT/bin/create-ai-memory.js" --bogus </dev/null >/dev/null 2>&1 )
+is "$?" "2" "create-ai-memory rejects an unknown option"
+is "$(ls -A "$FLAGCWD")" "" "create-ai-memory flags write nothing to disk"
+rm -rf "$FLAGCWD"
+
 # Present on disk is not the same as reachable. npm create copies the tool into
 # a folder rather than installing it globally, so nothing puts the bin entries
 # on PATH -- they have to be exposed as functions or the documented commands
