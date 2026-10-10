@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.3](https://github.com/rambaarde/create-ai-memory/compare/v0.16.2...v0.16.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **cli:** handle --version and --help before installing ([2fc4c91](https://github.com/rambaarde/create-ai-memory/commit/2fc4c916f09d7cde8c8c58f63df01df98b30a1f1))
+* **cli:** handle --version and --help before installing ([532b553](https://github.com/rambaarde/create-ai-memory/commit/532b5534af6dd5f3e74a68c6ab03fce745189cd2))
+* **cli:** handle --version and --help before installing ([9832d8e](https://github.com/rambaarde/create-ai-memory/commit/9832d8ec2a914217e665b9eb496c04b3846d9d8c))
+
 ## [0.16.2](https://github.com/rambaarde/create-ai-memory/compare/v0.16.1...v0.16.2) (2026-10-04)
 
 
