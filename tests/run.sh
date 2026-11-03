@@ -847,6 +847,13 @@ SCHED_DRY="$(AI_MEM_ROOT="$_LINK_ROOT" ai-mem-sleep-schedule --at 02:30 2>/dev/n
 has "$SCHED_DRY" "ai-mem-sleep --apply" "the schedule runs the bedtime pass"
 has "$SCHED_DRY" "ai-mem.zsh"          "the schedule sources the module (a cron/launchd shell would not)"
 has "$SCHED_DRY" "install with"        "the dry run tells you how to install it"
+has "$SCHED_DRY" "export AI_MEM_ROOT=$_LINK_ROOT" \
+  "the scheduled job carries the vault path (it does not read ~/.zshrc)"
+if [[ "$OSTYPE" == darwin* ]]; then
+  has "$(AI_MEM_ROOT="$HOME/Documents/vault/_Ai_Memory" ai-mem-sleep-schedule 2>/dev/null)" "folder that macOS protects" \
+    "the schedule warns when the vault is in a macOS-protected folder"
+  hasnt "$SCHED_DRY" "folder that macOS protects" "no warning for a vault outside the protected folders"
+fi
 SCHED_BAD="$(ai-mem-sleep-schedule --at 99:99 2>&1)"; SCHED_BAD_EXIT=$?
 is  "$SCHED_BAD_EXIT" "2"              "an invalid --at time is rejected"
 has "$SCHED_BAD" "HH:MM"              "the rejection names the expected format"
