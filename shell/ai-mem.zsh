@@ -1713,11 +1713,19 @@ ai-mem-sleep-schedule() {
     fi
     local hh="${at%%:*}" mm="${at##*:}"
     local module="$AI_MEM_HOME/ai-mem.zsh"
-    local cmd="source ${(q)module}; ai-mem-sleep --apply"
+    # A scheduled shell does not read ~/.zshrc, so carry the vault path in the
+    # job. Without it the job scans the default root, not the user's vault.
+    local cmd="export AI_MEM_ROOT=${(q)AI_MEM_ROOT}; source ${(q)module}; ai-mem-sleep --apply"
     local label="app.ai-mem.sleep"
     local log="${AI_MEM_ROOT:h}/ai-mem-sleep.log"
 
     if [[ "$OSTYPE" == darwin* ]]; then
+        # macOS can deny a launchd job read access to these folders ("Operation
+        # not permitted"). The pass then finds no logs and does nothing.
+        case "${AI_MEM_ROOT:A}/" in
+            "$HOME"/(Documents|Desktop|Downloads)/*|"$HOME/Library/Mobile Documents/"*)
+                print -r -- "warning: $AI_MEM_ROOT is in a folder that macOS protects. A launchd job can be denied read access there, and then the pass does nothing. Check the job log after its first run, or run 'ai-mem-sleep --apply' from an app that has access." ;;
+        esac
         local plist="${AI_MEM_LAUNCHAGENTS:-$HOME/Library/LaunchAgents}/${label}.plist"
         local body='<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
