@@ -731,6 +731,13 @@ weekly/account limits when the provider exposes them. Set
 `AI_MEM_OMP_SHOW_USAGE=0` to skip that preflight check. Plain `omp` is
 unchanged; it does not load the ai-memory vault or session context.
 
+GUI clients that need OMP RPC or ACP can still invoke the literal `omp-start`
+pipeline. Set `AI_MEM_NONINTERACTIVE=1`, then run `omp-start --mode rpc` or
+`omp-start acp`. The launcher skips the terminal skill picker and moves the
+assembled vault context into OMP's system-prompt channel before the first user
+turn. Set `AI_MEM_MANUAL_SKILLS` to explicit pipe-separated skill keys when a
+noninteractive client must enable skills automatically without asking.
+
 To add `aider`:
 
 1. Define the adapter in `shell/adapters.zsh`. It receives `$1` memory prompt,
@@ -892,6 +899,8 @@ git -C <repo> config core.hooksPath .githooks
 | `AI_MEM_PREFERRED_HARNESS` | empty | Optional override used by every `*-start`; e.g. `omp` makes `codex-start` launch OMP while keeping the familiar entry point |
 | `AI_MEM_OMP_SHOW_USAGE` | `1` | Show OMP's redacted provider/account usage snapshot before an ai-memory OMP session; set to `0` to skip |
 | `AI_MEM_SKILLS` / `AI_MEM_SKILL_ORDER` | empty | Your per-session skills (see above) |
+| `AI_MEM_NONINTERACTIVE` | empty | Skip the terminal skill picker while keeping the literal `*-start` session pipeline; intended for GUI RPC/ACP launchers |
+| `AI_MEM_MANUAL_SKILLS` | empty | Pipe-separated skill keys to inject without the picker; also supplies skills for noninteractive launchers |
 | `AI_MEM_LESSON_INDEX_LIMIT` | `200` | Lesson slugs listed in the launch prompt before it truncates to the newest. Names only -- bodies are never injected |
 | `AI_MEM_NOTE_MAX_CHARS` | `8000` for shell launchers; `0` for GUI MCP | Cap on what one inlined note contributes to the launch prompt. Truncation states the real total and the path. `0` disables it |
 | `AI_MEM_ABOUT_ME_MAX_CHARS` | `1500` | Cap on each `inject: always` note in `_about_me/`. Kept small on purpose: these notes are paid for in every session. Truncation states the real total and the path |
