@@ -1543,7 +1543,10 @@ __ai_mem_unfilled_logs() {
         function flush() { if (cur != "" && !content) print cur }
         FNR == 1 { flush(); cur = FILENAME; content = 0; fm = ($0 == "---"); if (fm) next }
         content { next }
-        fm { if ($0 == "---") fm = 0; next }
+        # Frontmatter holds only "key: value" lines. A fence that never closes
+        # must not hide the body, so the first other line ends frontmatter and
+        # is read as body: a broken log is kept, never called unfilled.
+        fm { if ($0 == "---") { fm = 0; next } if ($0 ~ /^[A-Za-z_][A-Za-z0-9_-]*:/) next; fm = 0 }
         /^[[:space:]]*$/ || $0 == "# Session Outcome" || $0 == "# Global Session Notes" { next }
         /^\* \*\*[^*]+:\*\*[[:space:]]*\[.*\]$/ && !/\[\[/ { next }
         $0 == "## Auto Session Log" || /^_Auto-generated .*_$/ || /^\* \*\*(Repo|Branch):\*\* / { next }

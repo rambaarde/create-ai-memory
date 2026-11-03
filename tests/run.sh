@@ -779,6 +779,12 @@ exists "$E/empt-2020-02-03_10-00-00.md" "a bullet holding a [[wikilink]] counts 
 exists "$E/empt-2020-02-04_10-00-00.md" "an Auto Session Log with a commit counts as content"
 exists "$E/empt-2020-01-03_10-00-00.md" "unfilled logs do not take KEEP slots from filled ones"
 exists "$E/_archive/empt-2020-01-02_10-00-00.md" "filled logs past KEEP still decay by age"
+# A log whose frontmatter fence never closes still has a body to keep.
+mkdir -p "$AI_MEM_SESSION_DIR/brok"
+_brok="$AI_MEM_SESSION_DIR/brok/brok-$(strftime '%Y-%m-%d' $(( EPOCHSECONDS - 3 * 86400 )))_10-00-00.md"
+print -r -- $'---\ntype: ai-session-log\nproject: "[[brok]]"\nrepo_root: /x# Session Outcome\n* **High-Level Summary:**\n  * shipped the real fix' > "$_brok"
+AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
+exists "$_brok" "a log with unclosed frontmatter and a body is not archived as unfilled"
 
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 
