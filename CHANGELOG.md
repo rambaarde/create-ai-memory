@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.4](https://github.com/rambaarde/create-ai-memory/compare/v0.16.3...v0.16.4) (2026-11-03)
+
+
+### Bug Fixes
+
+* **sleep:** archive unfilled session logs and resolve archived links ([c09ff32](https://github.com/rambaarde/create-ai-memory/commit/c09ff32d1ad5f9fc4c3c2a73f1de87361a3404da))
+* **sleep:** archive unfilled session logs and resolve archived links ([00f3bb4](https://github.com/rambaarde/create-ai-memory/commit/00f3bb44f9cfeafea8b3ee17f8c667e541072eaf))
+* **sleep:** archive unfilled session logs and resolve archived links ([5f5bc1f](https://github.com/rambaarde/create-ai-memory/commit/5f5bc1fdd2b88a8e451f3a5cdfc7a552b811de15))
+
 ## [0.16.3](https://github.com/rambaarde/create-ai-memory/compare/v0.16.2...v0.16.3) (2026-10-10)
 
 
