@@ -653,6 +653,13 @@ has "$LINTOUT2" "orphaned session log"  "ai-mem-lint catches a missing project l
 has "$LINTOUT2" "dangling previous link" "ai-mem-lint catches a dangling previous link"
 has "$LINTOUT2" "unreferenced project note" "ai-mem-lint catches an unreferenced project note"
 
+# ai-mem-sleep moves older logs into _archive/; a previous link to one still
+# resolves in Obsidian (by basename), so it is not dangling.
+mkdir -p "$LINTVAULT/_session_logs/lintproj/_archive"
+: > "$LINTVAULT/_session_logs/lintproj/_archive/archived-log.md"
+sed -i.bak 's/does-not-exist/archived-log/' "$LINTVAULT/_session_logs/lintproj/lintproj-2026-08-28_11-00-00.md"
+hasnt "$(ai-mem-lint)" "dangling previous link" "ai-mem-lint resolves a previous link into the project's _archive/"
+
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
 
@@ -739,6 +746,39 @@ exists "$AI_MEM_SESSION_DIR/loose/0000-loose.md" "a non-dated file is never arch
 AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
 is "$(find "$AI_MEM_SESSION_DIR/aged" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')" "5" \
   "a second ai-mem-sleep --apply is idempotent"
+
+# Unfilled logs: a template nobody filled in (optionally with an Auto Session
+# Log that saw no commits and a clean tree) holds nothing to recall.
+_SLEEP3_ROOT="$(mktemp -d)/_Ai_Memory"
+export AI_MEM_ROOT="$_SLEEP3_ROOT"
+export AI_MEM_SESSION_DIR="$_SLEEP3_ROOT/_session_logs"
+E="$AI_MEM_SESSION_DIR/empt"
+mkdir -p "$E" "$_SLEEP3_ROOT/_lessons"
+_tmpl=$'---\ntype: ai-session-log\nproject: "[[empt]]"\nprevious: "[[empt-2020-01-01_10-00-00]]"\n---\n\n# Session Outcome\n* **High-Level Summary:** [What changed or was decided]\n* **Next Step:** [Most important follow-up]\n'
+_noop_auto=$'\n## Auto Session Log\n_Auto-generated 2020-01-01 10:00:00. Edit the Session Outcome section above for durable notes._\n\n* **Repo:** /tmp/x\n* **Branch:** main\n* **Commits this session:**\n- (no commits this session)\n* **Uncommitted changes at last checkpoint:**\n- (working tree clean)\n'
+# Five filled ancient logs, older than three newer unfilled ones.
+for d in 2020-01-01 2020-01-02 2020-01-03 2020-01-04 2020-01-05; do
+  print -r -- "${_tmpl/\[What changed or was decided\]/real work}" > "$E/empt-${d}_10-00-00.md"
+done
+print -r -- "$_tmpl" > "$E/empt-2020-02-01_10-00-00.md"
+print -r -- "$_tmpl$_noop_auto" > "$E/empt-2020-02-02_10-00-00.md"
+echo sha > "$E/empt-2020-02-02_10-00-00.startsha"
+print -r -- "${_tmpl}* **Next Step:** [[a-real-link]]" > "$E/empt-2020-02-03_10-00-00.md"
+print -r -- "${_tmpl}${_noop_auto/- \(no commits this session\)/- abc123 fix: a commit}" > "$E/empt-2020-02-04_10-00-00.md"
+_today="$(strftime '%Y-%m-%d' $EPOCHSECONDS)"
+print -r -- "$_tmpl" > "$E/empt-${_today}_10-00-00.md"
+has "$(AI_MEM_SLEEP_KEEP=5 ai-mem-sleep 2>/dev/null)" "empt: 2 unfilled log(s) to archive" \
+  "ai-mem-sleep reports unfilled logs separately"
+AI_MEM_SLEEP_KEEP=5 ai-mem-sleep --apply >/dev/null 2>&1
+for d in 2020-02-01 2020-02-02; do
+  exists "$E/_archive/empt-${d}_10-00-00.md" "an old unfilled log ($d) is archived regardless of KEEP"
+done
+exists "$E/_archive/empt-2020-02-02_10-00-00.startsha" "an unfilled log's .startsha follows it into the archive"
+exists "$E/empt-${_today}_10-00-00.md" "an unfilled log from today stays: its session may still be running"
+exists "$E/empt-2020-02-03_10-00-00.md" "a bullet holding a [[wikilink]] counts as content"
+exists "$E/empt-2020-02-04_10-00-00.md" "an Auto Session Log with a commit counts as content"
+exists "$E/empt-2020-01-03_10-00-00.md" "unfilled logs do not take KEEP slots from filled ones"
+exists "$E/_archive/empt-2020-01-02_10-00-00.md" "filled logs past KEEP still decay by age"
 
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 
