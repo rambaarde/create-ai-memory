@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.5](https://github.com/rambaarde/create-ai-memory/compare/v0.16.4...v0.16.5) (2026-11-03)
+
+
+### Bug Fixes
+
+* **sleep:** keep logs whose frontmatter never closes ([ad75ee9](https://github.com/rambaarde/create-ai-memory/commit/ad75ee953d78079568df8c275f12bc5311a5bbde))
+* **sleep:** keep logs whose frontmatter never closes ([8f934b4](https://github.com/rambaarde/create-ai-memory/commit/8f934b459ba6dfddb34d039b2ebe402878b1ed11))
+* **sleep:** keep logs whose frontmatter never closes ([b16e274](https://github.com/rambaarde/create-ai-memory/commit/b16e2746a75db888913f80009c068b2b76cd3fb4))
+
 ## [0.16.4](https://github.com/rambaarde/create-ai-memory/compare/v0.16.3...v0.16.4) (2026-11-03)
 
 
