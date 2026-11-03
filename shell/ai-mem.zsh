@@ -1381,7 +1381,7 @@ ai-mem-lint() {
     __ai_mem_paths
     local fix=0
     [[ "${1:-}" == "--fix" ]] && fix=1
-    local issues=0 f label target found
+    local issues=0 f label target
     # Open Knowledge Format names exactly one required frontmatter field:
     # `type`. Every note the vault ships already declares one except session
     # logs, which predate the field -- so a vault that has been in use carries
@@ -1403,8 +1403,10 @@ ai-mem-lint() {
         if [[ "$label" == *'[['* ]]; then
             target="${label#*\[\[}"
             target="${target%%\]\]*}"
-            found="$(find "${f:h}" -maxdepth 1 -name "${target}.md" -print -quit 2>/dev/null)"
-            if [[ -z "$found" ]]; then
+            # ai-mem-sleep moves older logs into the project's _archive/, and
+            # Obsidian resolves a link by basename anywhere in the vault. A
+            # link to an archived log still opens, so it is not dangling.
+            if [[ ! -f "${f:h}/${target}.md" && ! -f "${f:h}/_archive/${target}.md" ]]; then
                 print -r -- "dangling previous link: $f -> [[${target}]] (not found)"
                 (( issues++ ))
             fi
@@ -1530,6 +1532,27 @@ ai-mem-lint() {
     return $(( issues > 0 ? 1 : 0 ))
 }
 
+# Prints each given session log that holds nothing a later session can use:
+# frontmatter, the template heading, [placeholder] bullets, and at most an
+# Auto Session Log block that recorded no commits and a clean tree. These are
+# sessions that were opened and closed with nothing written. One awk pass over
+# all files. A 0-byte file is never printed, so it is never archived.
+__ai_mem_unfilled_logs() {
+    (( $# )) || return 0
+    awk '
+        function flush() { if (cur != "" && !content) print cur }
+        FNR == 1 { flush(); cur = FILENAME; content = 0; fm = ($0 == "---"); if (fm) next }
+        content { next }
+        fm { if ($0 == "---") fm = 0; next }
+        /^[[:space:]]*$/ || $0 == "# Session Outcome" || $0 == "# Global Session Notes" { next }
+        /^\* \*\*[^*]+:\*\*[[:space:]]*\[.*\]$/ && !/\[\[/ { next }
+        $0 == "## Auto Session Log" || /^_Auto-generated .*_$/ || /^\* \*\*(Repo|Branch):\*\* / { next }
+        $0 == "* **Commits this session:**" || $0 == "- (no commits this session)" { next }
+        $0 == "* **Uncommitted changes at last checkpoint:**" || $0 == "- (working tree clean)" { next }
+        { content = 1 }
+        END { flush() }
+    ' "$@" 2>/dev/null
+}
 
 # ai-mem-sleep: the vault's "bedtime" pass -- consolidation, decay and lint in
 # one run, modelled on how a brain sleeps. It NEVER prunes a lesson: the
@@ -1538,9 +1561,14 @@ ai-mem-lint() {
 # and even they are ARCHIVED (moved under the project's _archive/, which
 # ai-mem-search skips), never deleted -- git keeps every move reversible.
 #
+# Unfilled logs (see __ai_mem_unfilled_logs) are archived once they are dated
+# before yesterday, whatever KEEP says, and they do not count toward KEEP. Most
+# sessions are opened and closed without a note, so counting them let empty
+# templates push every real log out of the hot set.
+#
 # Dry run by default: it reports what would move and nothing changes on disk.
 # --apply performs the archive moves and backs the vault up. Tunables:
-#   AI_MEM_SLEEP_KEEP        newest logs per project always kept hot (default 5)
+#   AI_MEM_SLEEP_KEEP        newest filled logs per project kept hot  (default 5)
 #   AI_MEM_SLEEP_DAYS        archive logs older than this many days   (default 90)
 #   AI_MEM_SLEEP_CONSOLIDATE flag a project with this many hot logs   (default 8)
 ai-mem-sleep() {
@@ -1555,13 +1583,17 @@ ai-mem-sleep() {
     # Cut-off date as a string. Filenames carry YYYY-MM-DD, which sorts and
     # compares chronologically as text, so no BSD-vs-GNU `date` parsing is
     # needed -- strftime on an epoch offset is portable and dependency-free.
-    local cutoff
+    local cutoff empty_cutoff
     cutoff="$(strftime '%Y-%m-%d' $(( EPOCHSECONDS - days * 86400 )))"
+    # ponytail: dated before yesterday = at least 24h old. A session still
+    # running after that long loses its log to the archive; the Stop hook then
+    # skips the missing file. Raise this if multi-day sessions become normal.
+    empty_cutoff="$(strftime '%Y-%m-%d' $(( EPOCHSECONDS - 86400 )))"
 
     if (( apply )); then
-        print -r -- "ai-mem-sleep: applying. Keep newest $keep per project; archive session logs dated before $cutoff."
+        print -r -- "ai-mem-sleep: applying. Keep newest $keep filled logs per project; archive session logs dated before $cutoff, and unfilled logs dated before $empty_cutoff."
     else
-        print -r -- "ai-mem-sleep: dry run (nothing moves). Keep newest $keep per project; would archive logs dated before $cutoff."
+        print -r -- "ai-mem-sleep: dry run (nothing moves). Keep newest $keep filled logs per project; would archive logs dated before $cutoff, and unfilled logs dated before $empty_cutoff."
     fi
     print -r -- "Lessons are never touched -- only ephemeral session logs, and they are archived, not deleted."
     print -r -- "--"
@@ -1574,7 +1606,7 @@ ai-mem-sleep() {
 
     local -i total_archived=0
     local project pdir log sidecar stem logdate
-    local -a logs stale
+    local -a logs filled unfilled stale empty
     local -i i hot remaining
     for pdir in "$sessions_root"/*(/N); do
         project="${pdir:t}"
@@ -1585,33 +1617,41 @@ ai-mem-sleep() {
         # is date order within one project. (On) sorts by name, descending.
         logs=( "$pdir"/*.md(N.On) )
         (( ${#logs} )) || continue
+        unfilled=( ${(f)"$(__ai_mem_unfilled_logs "${logs[@]}")"} )
+        filled=( ${logs:|unfilled} )
 
-        # The newest KEEP stay hot however old they are, so a dormant project
-        # keeps a readable recent history instead of emptying out.
-        hot=$(( keep < ${#logs} ? keep : ${#logs} ))
+        empty=()
+        for log in "${unfilled[@]}"; do
+            stem="${${log:t:r}%%_*}"; logdate="${stem: -10}"
+            [[ "$logdate" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' ]] || continue   # not a dated log
+            [[ "$logdate" < "$empty_cutoff" ]] && empty+=( "$log" )
+        done
+
+        # The newest KEEP filled logs stay hot however old they are, so a
+        # dormant project keeps a readable recent history instead of emptying out.
+        hot=$(( keep < ${#filled} ? keep : ${#filled} ))
         stale=()
-        for (( i = hot + 1; i <= ${#logs}; i++ )); do
-            log="${logs[i]}"
+        for (( i = hot + 1; i <= ${#filled}; i++ )); do
+            log="${filled[i]}"
             stem="${${log:t:r}%%_*}"      # "proj-2026-08-20_10-00-00.md" -> "proj-2026-08-20"
             logdate="${stem: -10}"          # -> "2026-08-20"
             [[ "$logdate" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' ]] || continue   # not a dated log
             [[ "$logdate" < "$cutoff" ]] || continue                          # not old enough
             stale+=( "$log" )
         done
-        remaining=$(( ${#logs} - ${#stale} ))
+        remaining=$(( ${#filled} - ${#stale} ))
 
-        if (( ${#stale} )); then
-            print -r -- "$project: ${#stale} log(s) to archive (of ${#logs}, keeping newest $hot)"
-            if (( apply )); then
-                mkdir -p "$pdir/_archive"
-                for log in "${stale[@]}"; do
-                    mv -- "$log" "$pdir/_archive/"
-                    sidecar="${log:r}.startsha"
-                    [[ -f "$sidecar" ]] && mv -- "$sidecar" "$pdir/_archive/"
-                done
-            fi
-            (( total_archived += ${#stale} ))
+        (( ${#empty} )) && print -r -- "$project: ${#empty} unfilled log(s) to archive (nothing was recorded in them)"
+        (( ${#stale} )) && print -r -- "$project: ${#stale} log(s) to archive (of ${#filled} filled, keeping newest $hot)"
+        if (( apply && ${#stale} + ${#empty} )); then
+            mkdir -p "$pdir/_archive"
+            for log in "${stale[@]}" "${empty[@]}"; do
+                mv -- "$log" "$pdir/_archive/"
+                sidecar="${log:r}.startsha"
+                [[ -f "$sidecar" ]] && mv -- "$sidecar" "$pdir/_archive/"
+            done
         fi
+        (( total_archived += ${#stale} + ${#empty} ))
 
         # Consolidation candidate: many still-hot logs are unconsolidated
         # knowledge -- a nudge to distil them into a durable lesson.
