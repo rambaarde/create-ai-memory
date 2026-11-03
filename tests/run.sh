@@ -53,7 +53,7 @@ faketest() { : }            # stub CLI so the missing-agent guard lets faketest 
 __ai_adapter_ghost() { : }   # adapter exists but there is no `ghost` CLI on PATH
 OMP_CAPTURE="$(mktemp)"
 omp() { print -r -- "$*" > "$OMP_CAPTURE"; }
-export AI_MEM_AGENTS="claude codex agy gemini cursor opencode omp faketest ghost"
+export AI_MEM_HARNESSES="claude codex agy gemini cursor opencode omp faketest ghost"
 typeset -gA AI_MEM_SKILLS
 AI_MEM_SKILLS[terse]='Use terse output this session?::Respond tersely; drop filler.'
 AI_MEM_SKILL_ORDER=(terse)
@@ -223,6 +223,21 @@ AI_MEM_SKILL_ORDER=(terse)
 picked="$(printf 'y\n' | __ai_session_modes_pick)"
 is "$picked" "terse"                                            "picker returns a skill answered yes"
 is "$(printf 'n\n' | __ai_session_modes_pick)" ""                "picker drops a skill answered no"
+print -r -- "y" | __ai_session_start faketest >/dev/null 2>&1
+has "$(<"$CAPTURE")" "Respond tersely" \
+  "a skill picked at the terminal prompt reaches the harness's opening message"
+
+AI_MEM_NONINTERACTIVE=1
+AI_MEM_MANUAL_SKILLS=""
+print -r -- "y" | __ai_session_start faketest >/dev/null 2>&1
+hasnt "$(<"$CAPTURE")" "Respond tersely" \
+  "noninteractive *-start skips the terminal skill picker"
+__ai_session_start faketest --mode rpc --extension /tmp/t3-extension.ts >/dev/null 2>&1
+hasnt "$(<"$CAPTURE")" "--mode rpc" \
+  "noninteractive transport arguments stay out of the memory prompt"
+hasnt "$(<"$CAPTURE")" "t3-extension.ts" \
+  "noninteractive extension paths stay out of the memory prompt"
+unset AI_MEM_NONINTERACTIVE AI_MEM_MANUAL_SKILLS
 has "$(__ai_session_modes_instructions terse)" "Respond tersely" "instructions inject the chosen skill's block"
 
 # --- 7. launcher generation ---------------------------------------------------
@@ -424,7 +439,30 @@ has "$(<"$OMP_CAPTURE")" "--append-system-prompt" "omp adapter uses OMP's system
 has "$(<"$OMP_CAPTURE")" "SESSION MODE" "omp adapter injects selected session skills"
 hasnt "$(<"$OMP_CAPTURE")" "--print" "omp adapter does not use one-shot print mode"
 
-# The suite pins its own AI_MEM_AGENTS above, so assert the SHIPPED default
+# GUI clients still invoke the literal omp-start function. RPC moves the
+# assembled opening prompt into the system channel because no user turn exists
+# when the process starts.
+AI_MEM_NONINTERACTIVE=1
+print -r -- "y" | omp-start --mode rpc >/dev/null 2>&1
+OMP_RPC_CAPTURE="$(<"$OMP_CAPTURE")"
+has "$OMP_RPC_CAPTURE" "--mode rpc" \
+  "literal omp-start preserves RPC transport arguments"
+has "$OMP_RPC_CAPTURE" "BEGIN AI MEMORY CONTEXT" \
+  "literal omp-start injects assembled vault context into RPC"
+has "$OMP_RPC_CAPTURE" "Read these notes before doing anything else:" \
+  "literal omp-start carries the normal memory prompt into RPC"
+hasnt "$OMP_RPC_CAPTURE" "Respond tersely" \
+  "noninteractive RPC does not wait for or apply terminal skill answers"
+has "$(<"$token_file")" "source=omp-start" \
+  "literal omp-start records itself as the context source"
+AI_MEM_MANUAL_SKILLS=terse
+omp-start --mode rpc >/dev/null 2>&1
+has "$(<"$OMP_CAPTURE")" "Respond tersely" \
+  "noninteractive RPC applies explicitly configured skills without prompting"
+unset AI_MEM_MANUAL_SKILLS
+unset AI_MEM_NONINTERACTIVE
+
+# The suite pins its own AI_MEM_HARNESSES above, so assert the SHIPPED default
 # instead: without agy in it, a real user gets "command not found" from
 # agy-start with no sign that an adapter exists.
 has "$(<"$REPO_ROOT/shell/ai-mem.zsh")" "AI_MEM_HARNESSES:=" \
