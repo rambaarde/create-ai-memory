@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.0](https://github.com/rambaarde/create-ai-memory/compare/v0.16.5...v0.17.0) (2026-11-03)
+
+
+### Features
+
+* **omp:** run the literal omp-start pipeline for GUI RPC and ACP launchers ([9b33361](https://github.com/rambaarde/create-ai-memory/commit/9b3336152b896e1fc4d02a172cd418f78d2d2c50))
+* **omp:** run the literal omp-start pipeline for GUI RPC and ACP launchers ([8507c63](https://github.com/rambaarde/create-ai-memory/commit/8507c6351a55387af3f0e624ec5fda48291dc04e))
+* **omp:** run the literal omp-start pipeline for GUI RPC and ACP launchers ([16c15c9](https://github.com/rambaarde/create-ai-memory/commit/16c15c977a411747e57140d7654822b6833cc494))
+
 ## [0.16.5](https://github.com/rambaarde/create-ai-memory/compare/v0.16.4...v0.16.5) (2026-11-03)
 
 
