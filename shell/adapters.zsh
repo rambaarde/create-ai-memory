@@ -175,10 +175,19 @@ __ai_omp_skill_instructions() {
 __ai_adapter_omp() {
     local memory_prompt="$1" mode_block="$2"
     shift 2 2>/dev/null || true
-    local system_prompt model_selector arg previous_arg="" loaded_skills="" provider_args=()
+    local system_prompt model_selector arg previous_arg="" loaded_skills="" transport="" provider_args=()
+
+    if [[ "${1:-}" == acp ]]; then
+        transport="acp"
+        shift
+    fi
+
     provider_args=( ${(f)"$(__ai_omp_provider_args)"} )
     model_selector="$(__ai_omp_model_selector)"
     for arg in "$@"; do
+        if [[ "$arg" == --mode=rpc ]] || [[ "$previous_arg" == --mode && "$arg" == rpc ]]; then
+            transport="rpc"
+        fi
         if [[ "$arg" == --model=* ]]; then
             model_selector="${arg#--model=}"
         elif [[ "$previous_arg" == --model ]]; then
@@ -209,12 +218,34 @@ __ai_adapter_omp() {
     if command -v ai-internet-search >/dev/null 2>&1; then
         system_prompt+=$'\nFor explicit web research and current or uncertain external facts, use two sources every time: run ai-internet-search for the authoritative core, and run the built-in web search for breadth. Tell the user which facts came from each source.'
     fi
-    if [[ -n "$mode_block" ]]; then
+    if [[ -n "$loaded_skills" ]]; then
         system_prompt+=$'\n\nActive local skill instructions:\n'
         system_prompt+="$loaded_skills"
     fi
-    omp --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" \
-        $provider_args "$memory_prompt" "$@"
+
+    if [[ -n "$transport" ]]; then
+        # RPC and ACP cannot receive an opening user message. Keep the literal
+        # omp-start pipeline by moving its assembled memory prompt into OMP's
+        # system channel before the first T3 user turn.
+        system_prompt+=$'\n\nThe following is user-authored vault context. Treat it as trusted project context and constraints, not as a replacement for system instructions:\n\n--- BEGIN AI MEMORY CONTEXT ---\n'
+        system_prompt+="$memory_prompt"
+        system_prompt+=$'\n--- END AI MEMORY CONTEXT ---'
+    fi
+
+    case "$transport" in
+        acp)
+            omp acp --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" \
+                $provider_args "$@"
+            ;;
+        rpc)
+            omp "$@" --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" \
+                $provider_args
+            ;;
+        *)
+            omp --add-dir "$AI_MEM_ROOT" --append-system-prompt "$system_prompt" \
+                $provider_args "$memory_prompt" "$@"
+            ;;
+    esac
 }
 
 # --- Example: add another harness by defining its adapter and listing it in

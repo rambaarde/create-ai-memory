@@ -998,7 +998,10 @@ __ai_session_start() {
         echo "ai-memory: this shell loaded an older copy of ai-mem; the files on disk have changed since." >&2
         echo "           Run 'source ~/.zshrc' or open a new terminal to pick up the current version." >&2
     fi
-    local session_prompt="${*:-}"
+    # Interactive launchers treat remaining args as the opening task. GUI RPC
+    # args configure the transport and must never leak into vault context.
+    local session_prompt=""
+    [[ -z "${AI_MEM_NONINTERACTIVE:-}" ]] && session_prompt="${*:-}"
 
     # Fail fast with a clear message if the agent's CLI is missing, before a
     # session log is created. Cursor is exempt: its adapter falls back to opening
@@ -1016,7 +1019,11 @@ __ai_session_start() {
     __ai_mem_export_active "$active_project" "$previous_session_note" "$session_note"
 
     local session_modes mode_block
-    if [[ -n "${AI_MEM_MANUAL_SKILLS:-}" ]]; then
+    if [[ -n "${AI_MEM_NONINTERACTIVE:-}" ]]; then
+        # GUI/RPC launchers have no terminal for the skill picker. They still
+        # use the same *-start pipeline, with optional explicit skill keys.
+        session_modes="${AI_MEM_MANUAL_SKILLS:-}"
+    elif [[ -n "${AI_MEM_MANUAL_SKILLS:-}" ]]; then
         # One-off opt-in for skills that should not appear in the startup picker.
         session_modes="$AI_MEM_MANUAL_SKILLS"
     else
