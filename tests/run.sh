@@ -965,6 +965,23 @@ has "$(print -r -- "$RECENCY_HITS" | head -1)" "2026-06-15_12-30-00" "ai-mem-sea
 has "$(print -r -- "$RECENCY_HITS" | tail -1)" "2026-01-01_00-00-00" "ai-mem-search sorts the oldest match last"
 hasnt "$RECENCY_OUT" "ts=" "ai-mem-search never leaks its internal sort-key variable into the output"
 
+# Widened search. A multi-word term with no exact phrase hit falls back to its
+# words, so word order no longer decides between "found" and "never written
+# down". The note holding both words must outrank a NEWER note holding one,
+# or recency would bury the answer just as it did before.
+print -rl -- "quokkabar sits on one line" "zebrafoo sits on another" \
+  > "$SEARCHVAULT/_session_logs/searchproj1/searchproj1-2026-08-01_00-00-00.md"
+echo "zebrafoo alone" > "$SEARCHVAULT/_session_logs/searchproj2/searchproj2-2026-08-02_00-00-00.md"
+WIDE_OUT="$(ai-mem-search "zebrafoo quokkabar")"; WIDE_EXIT=$?
+is  "$WIDE_EXIT" "0" "ai-mem-search finds words that never appear as one phrase"
+has "$WIDE_OUT" "any of: zebrafoo quokkabar" "ai-mem-search says it widened the term to its words"
+has "$(print -r -- "$WIDE_OUT" | grep -E '^_session_logs/' | head -1)" "searchproj1-2026-08-01" \
+  "a note holding more of the words outranks a newer note holding fewer"
+has "$(ai-mem-search "the answer")" "match(es) for 'the answer'" "an exact phrase hit is not widened"
+fails 'ai-mem-search "nowordone nowordtwo"' "ai-mem-search still fails when no word matches"
+has "$(ai-mem-search "nowordone nowordtwo")" "also tried each word: nowordone, nowordtwo" \
+  "the empty state says the words were tried too, so it reads as absent, not missed"
+
 # Performance regression guard. The recency sort once spawned two
 # subprocesses PER MATCHED LINE, which cost 25s for a common term on a real
 # 486-file vault while the grep underneath it took 0.16s -- a bug every
