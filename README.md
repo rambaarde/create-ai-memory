@@ -400,11 +400,13 @@ stemming, not fuzzy:
 
 That last row is the limit: a misspelling finds nothing.
 
-**Search one distinctive word, not a sentence.** Matching is literal
-substring, so the whole error line `command not found: sed` finds **nothing**
-while `command not found` finds it — and a bare tool name like `sed` returns
-1,012 irrelevant lines. Pick the most unusual word in the symptom and try two
-or three separately.
+**Search a few distinctive words.** The exact phrase is tried first. If it
+has no hits, each word is tried on its own, and notes that hold more of the
+words rank first, so word order does not decide the result: on a real vault
+`migration prisma` found **nothing** as a phrase, and now returns the Prisma
+migration lessons first. Filler words (`the`, `how`, `not`…) are ignored. A
+bare tool name like `sed` alone returns over 2,000 lines, so add a word from
+the symptom.
 
 **Token cost is bounded and flat:**
 
@@ -954,8 +956,8 @@ vault's session template predates the current one. Scaffolding only fills in
 `ai-mem-lint --fix`.
 
 **Search returns nothing for a term you are sure you wrote.**
-Matching is literal substring with no fuzzy matching, so a typo finds zero.
-Search one distinctive word rather than a phrase or a whole error line — see
+Words match as literal substrings with no fuzzy matching, so a typo finds
+zero. Use a few distinctive words rather than a whole error line — see
 [what it costs](#what-it-costs-and-what-it-cannot-do).
 
 ## Why plain files

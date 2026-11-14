@@ -814,7 +814,7 @@ Treat the global profile and standards note as the shared baseline for every run
 Keep durable preferences and project facts in the vault, and keep the active session log updated with decisions, blockers, and next steps.
 For anything not covered above -- a decision from further back, a different project, a health check on the vault's links -- run \`ai-mem-search <term> [project]\` or \`ai-mem-lint\` yourself. Search is case-insensitive and matches literally, and its output is capped: if it reports results hidden, narrow with a project argument or a more specific term rather than assuming you have seen everything. Start broad and narrow from there -- a first query that is too specific is the usual way to miss what you were looking for.
 When you hit a blocker -- an error you do not immediately understand, a test failing for an unclear reason, a decision you cannot settle from the code in front of you, or a second failed attempt at the same thing -- search the vault BEFORE guessing again. You have likely been here before, and \`_lessons/\` exists because the answer usually was written down; lessons are ranked above session logs in the results, so a hit under \`_lessons/\` is the recorded fix.
-Search ONE distinctive word, not a sentence. Matching is literal substring, so a whole error line ('command not found: sed') finds nothing while 'command not found' finds it, and a bare tool name ('sed', 'git') returns hundreds of irrelevant lines. Pick the most unusual word in the symptom and try two or three of them separately.
+Search a few distinctive words, not a whole sentence. The exact phrase is tried first. If it has no hits, each word is tried, and notes that hold more of the words rank first. A bare tool name alone ('sed', 'git') returns hundreds of irrelevant lines, so add a word from the symptom.
 If the user asks to see, open or browse their memory rather than search it, run \`ai-mem-serve\` -- it opens the vault as a graph in their browser, and is safe to run again if it is already up.
 When you hit a mistake, decision, or solution worth remembering across projects (not just this one), run \`ai-lesson <topic-slug> <problem> <solution>\` -- e.g. \`ai-lesson rate-limiting "a fixed-window limiter kept losing bursts of legitimate traffic" "switched to a token bucket, which absorbs bursts correctly"\`. It appends a dated Problem/Solution entry to a cross-project note at _lessons/<topic-slug>.md; ai-mem-search already covers it.
 EOF
@@ -1833,8 +1833,33 @@ ai-mem-search() {
     # stay in git and on disk, just not in a default search.
     raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
 
+    # Exact phrase first, then each word. A multi-word term used to be one
+    # literal phrase, so word order decided whether anything came back:
+    # measured on a real vault, 'prisma migration' found 11 lines and
+    # 'migration prisma' found 0, and 30 three-word queries built from real
+    # lessons found their lesson 0 times out of 30. An agent cannot tell that
+    # empty result from "never written down", so it solves the problem again.
+    # Only a phrase with NO hits is widened, so every query that worked before
+    # returns exactly what it returned before.
+    local -a words
     if [[ -z "$raw" ]]; then
-        print -r -- "no matches for '$term' in $search_root"
+        words=(${(f)"$(__ai_mem_search_words "$term")"})
+        if (( $#words >= 2 )); then
+            local -a patterns
+            local w
+            for w in $words; do patterns+=(-e "$w"); done
+            raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' "${patterns[@]}" "$search_root" 2>/dev/null)"
+        else
+            words=()
+        fi
+    fi
+
+    if [[ -z "$raw" ]]; then
+        if (( $#words )); then
+            print -r -- "no matches for '$term' in $search_root (also tried each word: ${(j:, :)words})"
+        else
+            print -r -- "no matches for '$term' in $search_root"
+        fi
         return 1
     fi
 
@@ -1873,28 +1898,32 @@ ai-mem-search() {
     [[ -z "$project" ]] && strengths="$(grep -rc '^## [0-9]' "$AI_MEM_ROOT/_lessons" 2>/dev/null)"
 
     local sorted
-    sorted="$(awk -v root="$search_root/" '
-        # First input: <lesson-file-path>:<entry-count>. Build the strength map.
-        FNR == NR {
-            if (match($0, /:[0-9]+$/)) {
-                str[substr($0, 1, RSTART - 1)] = substr($0, RSTART + 1) + 0
+    if (( $#words )); then
+        sorted="$(__ai_mem_search_rank_words "$search_root" "${(j: :)words}" "$strengths" "$raw")"
+    else
+        sorted="$(awk -v root="$search_root/" '
+            # First input: <lesson-file-path>:<entry-count>. Build the strength map.
+            FNR == NR {
+                if (match($0, /:[0-9]+$/)) {
+                    str[substr($0, 1, RSTART - 1)] = substr($0, RSTART + 1) + 0
+                }
+                next
             }
-            next
-        }
-        {
-            ts = "0000-00-00_00-00-00"
-            if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
-                ts = substr($0, RSTART, RLENGTH)
-            rel = $0
-            sub(root, "", rel)
-            is_lesson = (rel ~ /^_lessons\//)
-            rank = is_lesson ? "1" : "0"
-            # The file this match came from, to look up its reinforcement count.
-            path = $0
-            sub(/:[0-9]+:.*$/, "", path)
-            strength = is_lesson ? sprintf("%03d", str[path] + 0) : "000"
-            print rank "|" strength "|" ts "|" $0
-        }' <(print -r -- "$strengths") <(print -r -- "$raw") | sort -r | cut -d'|' -f4-)"
+            {
+                ts = "0000-00-00_00-00-00"
+                if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
+                    ts = substr($0, RSTART, RLENGTH)
+                rel = $0
+                sub(root, "", rel)
+                is_lesson = (rel ~ /^_lessons\//)
+                rank = is_lesson ? "1" : "0"
+                # The file this match came from, to look up its reinforcement count.
+                path = $0
+                sub(/:[0-9]+:.*$/, "", path)
+                strength = is_lesson ? sprintf("%03d", str[path] + 0) : "000"
+                print rank "|" strength "|" ts "|" $0
+            }' <(print -r -- "$strengths") <(print -r -- "$raw") | sort -r | cut -d'|' -f4-)"
+    fi
 
     # Bound the output. The consumer is normally an agent with a finite
     # context window, and an unbounded dump is actively harmful there in a
@@ -1906,7 +1935,7 @@ ai-mem-search() {
     # Count goes FIRST -- the reader needs the size of the result set before
     # the result set, not after it.
     local total limit per_file
-    total="$(print -r -- "$raw" | wc -l | tr -d ' ')"
+    total="$(print -r -- "$sorted" | wc -l | tr -d ' ')"
     limit="${AI_MEM_SEARCH_LIMIT:-25}"
     per_file="${AI_MEM_SEARCH_PER_FILE:-1}"
 
@@ -1932,7 +1961,11 @@ ai-mem-search() {
     files_shown="$(print -r -- "$spread" | head -n "$limit" | awk '
         { f = $0; sub(/:[0-9]+:.*$/, "", f); seen[f] = 1 } END { print length(seen) }')"
 
-    print -r -- "$total match(es) for '$term'"
+    if (( $#words )); then
+        print -r -- "$total match(es) for any of: ${(j: :)words} (no exact match for '$term'; notes matching more of the words rank first)"
+    else
+        print -r -- "$total match(es) for '$term'"
+    fi
     print -r -- "paths below $search_root"
     print -r -- "--"
     # Strip the repeated vault root (a third to a half of all output bytes on
@@ -1960,7 +1993,7 @@ ai-mem-search() {
     # excerpt, so a match doesn't leave you to manually chase the link
     # yourself.
     local links link target excerpt
-    links="$(print -r -- "$raw" | grep -oE '\[\[[^]]+\]\]' | sed -E 's/^\[\[|\]\]$//g' | sort -u)"
+    links="$(print -r -- "$sorted" | grep -oE '\[\[[^]]+\]\]' | sed -E 's/^\[\[|\]\]$//g' | sort -u)"
     [[ -n "$links" ]] || return 0
 
     print -r -- "--"
@@ -1974,4 +2007,84 @@ ai-mem-search() {
         print -r -- "  [[$link]] -> $target"
         [[ -n "$excerpt" ]] && print -r -- "    $excerpt"
     done <<< "$links"
+}
+
+# Content words of a search term, lowercased, deduplicated, one per line.
+# Edge punctuation is stripped ("found:" -> "found") but inner punctuation
+# stays, so "app.module.ts" and "ai-mem-search" remain single words. Filler
+# words are dropped: they match nearly every note and would outvote the
+# words that carry the question.
+__ai_mem_search_words() {
+    local -a stop out
+    stop=(a an and are as at be but by can do does did for from has have how i
+          if in is it its me my no not of on or our so that the their then there
+          this to was we were what when where which who why will with you your)
+    local w
+    for w in ${=1}; do
+        w="${(L)w}"
+        while [[ -n "$w" && "$w" == [^[:alnum:]]* ]]; do w="${w#?}"; done
+        while [[ -n "$w" && "$w" == *[^[:alnum:]] ]]; do w="${w%?}"; done
+        [[ -n "$w" ]] || continue
+        (( ${stop[(Ie)$w]} )) && continue
+        (( ${out[(Ie)$w]} )) && continue
+        out+=("$w")
+    done
+    print -rl -- $out
+}
+
+# Rank grep lines that match ANY of the words, for ai-mem-search's widened
+# pass. Prints the same <path>:<line>:<text> lines, best first:
+#   1. how many of the words the note contains (coverage, per note),
+#   2. lessons above everything else (same tier rule as the phrase search),
+#   3. the summed rarity (IDF) of the words the note contains, so a note
+#      holding one rare word beats one holding a word every note has,
+#   4. lesson reinforcement, then recency, then words on the line itself.
+# Notes matching fewer than half of the words are dropped, unless no note
+# reaches half, so a long question still returns its best partial match.
+# Args: <search-root> <space-separated words> <strength lines> <grep lines>.
+__ai_mem_search_rank_words() {
+    local root="$1" words="$2" strengths="$3" raw="$4"
+    local notes
+    notes="$(find "$root" -name '*.md' -not -path '*/.git/*' -not -path '*/_archive/*' 2>/dev/null | wc -l | tr -d ' ')"
+    awk -v root="$root/" -v words="$words" -v N="$notes" '
+        BEGIN { nw = split(words, W, " ") }
+        FNR == NR {
+            if (match($0, /:[0-9]+$/)) str[substr($0, 1, RSTART - 1)] = substr($0, RSTART + 1) + 0
+            next
+        }
+        {
+            if (!match($0, /:[0-9]+:/)) next
+            path = substr($0, 1, RSTART - 1)
+            text = tolower(substr($0, RSTART + RLENGTH))
+            c = 0
+            for (i = 1; i <= nw; i++) {
+                if (!index(text, W[i])) continue
+                c++
+                if (!((path, i) in has)) { has[path, i] = 1; df[i]++; cov[path]++ }
+            }
+            if (!c) next
+            n++; L[n] = $0; LP[n] = path; LC[n] = c
+        }
+        END {
+            best = 0
+            for (p in cov) if (cov[p] > best) best = cov[p]
+            need = int((nw + 1) / 2)
+            if (need > best) need = best
+            for (i = 1; i <= nw; i++) idf[i] = log(1 + N / (df[i] ? df[i] : 1))
+            for (p in cov) {
+                s = 0
+                for (i = 1; i <= nw; i++) if ((p, i) in has) s += idf[i]
+                score[p] = s
+            }
+            for (k = 1; k <= n; k++) {
+                p = LP[k]
+                if (cov[p] < need) continue
+                rel = p; sub(root, "", rel)
+                lesson = (rel ~ /^_lessons\//) ? 1 : 0
+                ts = "0000-00-00_00-00-00"
+                if (match(p, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
+                    ts = substr(p, RSTART, RLENGTH)
+                printf "%02d|%d|%09.4f|%03d|%s|%02d|%s\n", cov[p], lesson, score[p], lesson ? str[p] + 0 : 0, ts, LC[k], L[k]
+            }
+        }' <(print -r -- "$strengths") <(print -r -- "$raw") | sort -r | cut -d'|' -f7-
 }
