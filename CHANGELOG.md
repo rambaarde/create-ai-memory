@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.1](https://github.com/rambaarde/create-ai-memory/compare/v0.18.0...v0.18.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **lint:** stop false orphan, dangling-previous and stray-output reports ([310dfaa](https://github.com/rambaarde/create-ai-memory/commit/310dfaa66f6d1b90fe2e54beb1e9ec0581adc9a1))
+* **lint:** stop reporting code, placeholders and folder paths as dead links ([37be30e](https://github.com/rambaarde/create-ai-memory/commit/37be30e307886baade06f7aa4448c37044d9c209))
+
 ## [0.18.0](https://github.com/rambaarde/create-ai-memory/compare/v0.17.0...v0.18.0) (2026-11-14)
 
 
