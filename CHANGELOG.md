@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/rambaarde/create-ai-memory/compare/v0.17.0...v0.18.0) (2026-11-14)
+
+
+### Features
+
+* **search:** widen a phrase with no hits to its words, ranked by coverage ([112ab8a](https://github.com/rambaarde/create-ai-memory/commit/112ab8a4b5639ce59f2272606dfae97855362fdc))
+
 ## [0.17.0](https://github.com/rambaarde/create-ai-memory/compare/v0.16.5...v0.17.0) (2026-11-03)
 
 
