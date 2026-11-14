@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/rambaarde/create-ai-memory/compare/v0.18.1...v0.18.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **lint:** rank links to unwritten notes instead of listing them as errors ([f26a996](https://github.com/rambaarde/create-ai-memory/commit/f26a9968db2f08ba152d14cd731c17efa8704e8a))
+
 ## [0.18.1](https://github.com/rambaarde/create-ai-memory/compare/v0.18.0...v0.18.1) (2026-11-14)
 
 
