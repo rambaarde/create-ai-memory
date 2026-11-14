@@ -834,10 +834,20 @@ export AI_MEM_PROJECT_DIR="$_LINK_ROOT/_projects"
 mkdir -p "$AI_MEM_PROJECT_DIR" "$_LINK_ROOT/_lessons"
 echo "# proj" > "$AI_MEM_PROJECT_DIR/proj.md"
 printf '# lesson\n\nSee [[proj]], [[proj|an alias]], and [[ghost-note]].\n' > "$_LINK_ROOT/_lessons/x.md"
+# Not dead links: a shell test in a code span and in a fenced block, a
+# template placeholder, and a folder-path link to a note that exists.
+print -rl -- '# code' 'run `[[ -n $X ]]` first' '```sh' '[[ -f /tmp/y ]]' '```' \
+  'template [[{{project_name}}]]' 'path [[_projects/proj]] and [[../_projects/proj]]' > "$_LINK_ROOT/_lessons/code.md"
 LINK_OUT="$(ai-mem-lint 2>/dev/null)"
 has   "$LINK_OUT" "dangling wikilink"       "ai-mem-lint reports a dangling wikilink"
 has   "$LINK_OUT" "[[ghost-note]]"          "ai-mem-lint names the dead link's target"
 hasnt "$LINK_OUT" "[[proj]]"                "a wikilink that resolves is not flagged"
+hasnt "$LINK_OUT" "-n \$X"                  "a [[...]] inside inline code is not a wikilink"
+hasnt "$LINK_OUT" "-f /tmp/y"               "a [[...]] inside a fenced code block is not a wikilink"
+hasnt "$LINK_OUT" "{{project_name}}"        "a template placeholder is not a dangling link"
+hasnt "$LINK_OUT" "[[_projects/proj]]"      "a folder-path wikilink resolves by its last segment"
+hasnt "$LINK_OUT" "[[../_projects/proj]]"   "a relative folder-path wikilink resolves by its last segment"
+is "$(print -r -- "$LINK_OUT" | grep -c '^  ')" "1" "only the one real dead link is reported"
 hasnt "$LINK_OUT" "[[an alias]]"            "an aliased wikilink resolves on its target, not its alias"
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 export AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
@@ -1017,7 +1027,10 @@ AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 GVAULT="$(mktemp -d)/_Ai_Memory"
 mkdir -p "$GVAULT/_projects" "$GVAULT/_lessons" "$GVAULT/_archive"
 print -rl -- "---" "type: ai-project-context" "tags: [alpha, beta]" "---" "# Demo Project" > "$GVAULT/_projects/demo.md"
-print -rl -- "---" "type: ai-lesson" "---" "# A Lesson" "seen on [[demo]]" > "$GVAULT/_lessons/lesson-one.md"
+# The code span, the fenced block and the {{placeholder}} are not links, and
+# the folder-path link resolves to demo.md by its last segment.
+print -rl -- "---" "type: ai-lesson" "---" "# A Lesson" "seen on [[demo]] and [[_projects/demo]]" \
+  'run `[[ -n $X ]]` first' '```sh' '[[ -f /tmp/y ]]' '```' 'template [[{{project_name}}]]' > "$GVAULT/_lessons/lesson-one.md"
 print -rl -- "---" "type: ai-lesson" "---" "# Orphan" "points at [[nothing-here]]" > "$GVAULT/_lessons/orphan.md"
 print -rl -- "---" "type: ai-session-log" "---" "# Archived Template" > "$GVAULT/_archive/old.md"
 
@@ -1041,6 +1054,7 @@ gfield() { print -r -- "$GJSON" | node -e '
   if(q==="edgepair")  return process.stdout.write(g.edges.map(e=>e.source+">"+e.target).join(","));
   if(q==="dangle_orphan") return process.stdout.write(String((g.nodes.find(n=>n.id.endsWith("orphan.md"))||{}).dangling||0));
   if(q==="dangle_demo")   return process.stdout.write(String((g.nodes.find(n=>n.id.endsWith("demo.md"))||{}).dangling||0));
+  if(q==="dangle_lesson") return process.stdout.write(String((g.nodes.find(n=>n.id.endsWith("lesson-one.md"))||{}).dangling||0));
 })' "$1"; }
 
 is "$(gfield nodes)" "3" "graph server returns active notes, excluding archives"
@@ -1054,6 +1068,7 @@ is "$(gfield tags)" "alpha|beta" "graph server parses an inline frontmatter list
 # (a dashed ring in the viewer) rather than lose it silently.
 is "$(gfield dangle_orphan)" "1" "graph server flags a note that carries a dangling link"
 is "$(gfield dangle_demo)" "0" "a note with no dangling link is not flagged"
+is "$(gfield dangle_lesson)" "0" "graph server ignores code, {{placeholders}} and resolves a folder-path link"
 
 # Notes are created from templates and inherit the template's heading. Titling
 # by first H1 gave 354 notes the label "Session Outcome" and 34 "Project

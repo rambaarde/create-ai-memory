@@ -1503,29 +1503,46 @@ ai-mem-lint() {
     # a dead edge in the graph. Detection only: the dead link is surfaced, never
     # auto-removed, because the intended target is unknowable and a note's own
     # prose is the author's to edit. Wikilinks resolve by basename (the same way
-    # ai-mem-serve draws them), so the node set is every note's basename.
+    # ai-mem-serve draws them), so the node set is every note's basename. A
+    # folder path ([[_idea/x]], [[../dir/x]]) resolves by its last segment.
     #
-    # One grep over the vault, never a grep per file -- a per-file scan is the
-    # 25s antipattern ai-mem-search documents. Scope is the vault root derived
-    # from AI_MEM_SESSION_DIR (its parent), the same subtree the rest of this
-    # linter walks, so a caller that redirects the session dir redirects this too.
+    # Not links, so never reported (28 of 280 findings on a real vault were
+    # these): text inside `inline code` or a fenced code block, where a shell
+    # test such as [[ -n $X ]] looks like a wikilink, and {{placeholder}}
+    # targets in the note templates.
+    #
+    # One awk pass over the vault, never a process per file -- a per-file scan
+    # is the 25s antipattern ai-mem-search documents. Scope is the vault root
+    # derived from AI_MEM_SESSION_DIR (its parent), the same subtree the rest
+    # of this linter walks, so a caller that redirects the session dir
+    # redirects this too.
     local vault="${AI_MEM_SESSION_DIR:h}"
-    typeset -A _known
-    local nf
-    for nf in ${(f)"$(find "$vault" -name '*.md' -not -path '*/.git/*' 2>/dev/null)"}; do
-        _known[${nf:t:r}]=1
-    done
+    local known_file
+    known_file="$(mktemp)"
+    find "$vault" -name '*.md' -not -path '*/.git/*' 2>/dev/null \
+        | awk '{ sub(/.*\//, ""); sub(/\.md$/, ""); print }' > "$known_file"
     local -a dangling
-    local line src tgt
-    for line in ${(f)"$(grep -rHoE --include='*.md' --exclude-dir=.git -- '\[\[[^]]+\]\]' "$vault" 2>/dev/null)"}; do
-        src="${line%%:\[\[*}"          # path, before the ':[[' grep separator
-        tgt="${line##*:\[\[}"; tgt="${tgt%\]\]}"   # inside the brackets
-        tgt="${tgt%%\|*}"; tgt="${tgt%%#*}"        # drop |alias and #heading
-        tgt="${tgt## }"; tgt="${tgt%% }"
-        [[ -z "$tgt" ]] && continue
-        [[ -n "${_known[$tgt]-}" ]] && continue
-        dangling+=( "${src:t} -> [[${tgt}]]" )
-    done
+    dangling=( ${(f)"$(find "$vault" -name '*.md' -not -path '*/.git/*' -exec awk -v kf="$known_file" '
+        FILENAME == kf { known[$0] = 1; next }
+        FNR == 1 { fence = 0; src = FILENAME; sub(/.*\//, "", src) }
+        /^[ \t]*(```|~~~)/ { fence = !fence; next }
+        fence { next }
+        {
+            line = $0
+            gsub(/`[^`]*`/, "", line)
+            while (match(line, /\[\[[^\]]+\]\]/)) {
+                t = substr(line, RSTART + 2, RLENGTH - 4)
+                line = substr(line, RSTART + RLENGTH)
+                sub(/\|.*/, "", t); sub(/#.*/, "", t)
+                sub(/^ +/, "", t); sub(/ +$/, "", t)
+                if (t == "" || index(t, "{{")) continue
+                b = t; sub(/.*\//, "", b)
+                if ((t in known) || (b in known)) continue
+                print src " -> [[" t "]]"
+            }
+        }' "$known_file" {} + 2>/dev/null)"} )
+    rm -f "$known_file"
+    local line
     if (( $#dangling )); then
         print -r -- "$#dangling dangling wikilink(s) -- a [[link]] that resolves to no note:"
         for line in $dangling; do print -r -- "  $line"; done
