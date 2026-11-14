@@ -124,6 +124,10 @@ function titleOf(text, path, fm, h1Counts) {
 }
 
 const LINK_RE = /\[\[([^\]|#]+)/g;
+// Code is not prose: a shell test such as [[ -n $X ]] inside `inline code` or
+// a fenced block looks like a wikilink. Same rule as ai-mem-lint, including a
+// fence that never closes, which runs to the end of the note (as in Obsidian).
+const CODE_RE = /^[ \t]*(```|~~~)[^\n]*(?:\n[\s\S]*?^[ \t]*\1[^\n]*$|[\s\S]*$(?![\s\S]))|`[^`\n]*`/gm;
 
 /**
  * Build the graph.
@@ -171,7 +175,9 @@ function buildGraph() {
           return 0;
         }
       })(),
-      links: [...text.matchAll(LINK_RE)].map((m) => m[1].trim()),
+      links: [...text.replace(CODE_RE, '').matchAll(LINK_RE)]
+        .map((m) => m[1].trim())
+        .filter((l) => !l.includes('{{')),
     };
     nodes.push(node);
     // First writer wins: a duplicate basename is ambiguous in Obsidian too.
@@ -187,7 +193,8 @@ function buildGraph() {
     // mark which notes carry a broken link without inventing targets for them.
     const danglingSeen = new Set();
     for (const link of n.links) {
-      const target = byBasename.get(link);
+      // A folder path ([[_idea/x]], [[../dir/x]]) resolves by its last segment.
+      const target = byBasename.get(link) || byBasename.get(link.split('/').pop());
       if (!target) {
         if (link && link !== basename(n.id, '.md')) danglingSeen.add(link);
         continue;
