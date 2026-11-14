@@ -1219,6 +1219,22 @@ ai-lesson() {
 
     local project_name lesson_file timestamp
     project_name="$(__ai_mem_current_project)" || return 1
+    # Run from inside the vault, the project resolves to the vault's own repo
+    # or folder name: on a real vault 36 lesson entries were tagged with the
+    # vault repo's name, a project that does not exist. Inside the vault, use
+    # the active session's project, or refuse rather than guess.
+    if [[ -z "${AI_MEM_FORCE_PROJECT:-}" ]]; then
+        local here_root vault_root
+        here_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+        vault_root="$(git -C "$AI_MEM_ROOT" rev-parse --show-toplevel 2>/dev/null)"
+        if [[ "${PWD:A}/" == "${AI_MEM_ROOT:A}/"* || ( -n "$here_root" && "$here_root" == "$vault_root" ) ]]; then
+            if [[ -z "${AI_MEM_ACTIVE_PROJECT:-}" ]]; then
+                echo "ai-lesson: run from inside the memory vault, so the project is unknown. Run it from the project's repo, or set AI_MEM_ACTIVE_PROJECT=<project>." >&2
+                return 1
+            fi
+            project_name="$AI_MEM_ACTIVE_PROJECT"
+        fi
+    fi
     lesson_file="$AI_MEM_ROOT/_lessons/${slug}.md"
     timestamp="$(date '+%Y-%m-%d %H:%M')"
 
@@ -1507,17 +1523,19 @@ ai-mem-lint() {
     fi
 
 
-    # Dangling wikilinks: a [[target]] pointing at a note that does not exist --
-    # a dead edge in the graph. Detection only: the dead link is surfaced, never
-    # auto-removed, because the intended target is unknowable and a note's own
-    # prose is the author's to edit. Wikilinks resolve by basename (the same way
-    # ai-mem-serve draws them), so the node set is every note's basename. A
-    # folder path ([[_idea/x]], [[../dir/x]]) resolves by its last segment.
+    # Links to notes not written yet: a [[target]] with no note of that name.
+    # Obsidian treats these as intentional -- clicking one creates the note --
+    # so they are reported as a ranked summary, NOT counted as issues. A target
+    # linked from many notes is a missing hub worth writing; a target linked
+    # once is a breadcrumb. On a real vault 206 of 220 lint issues were these
+    # (people in meeting transcripts, projects without a note), and listing
+    # each one as an error buried the 14 that were real. Wikilinks resolve by
+    # basename (the same way ai-mem-serve draws them); a folder path
+    # ([[_idea/x]], [[../dir/x]]) resolves by its last segment.
     #
-    # Not links, so never reported (28 of 280 findings on a real vault were
-    # these): text inside `inline code` or a fenced code block, where a shell
-    # test such as [[ -n $X ]] looks like a wikilink, and {{placeholder}}
-    # targets in the note templates.
+    # Not links, so never counted: text inside `inline code` or a fenced code
+    # block, where a shell test such as [[ -n $X ]] looks like a wikilink, and
+    # {{placeholder}} targets in the note templates.
     #
     # One awk pass over the vault, never a process per file -- a per-file scan
     # is the 25s antipattern ai-mem-search documents. Scope is the vault root
@@ -1529,10 +1547,10 @@ ai-mem-lint() {
     known_file="$(mktemp)"
     find "$vault" -name '*.md' -not -path '*/.git/*' 2>/dev/null \
         | awk '{ sub(/.*\//, ""); sub(/\.md$/, ""); print }' > "$known_file"
-    local -a dangling
-    dangling=( ${(f)"$(find "$vault" -name '*.md' -not -path '*/.git/*' -exec awk -v kf="$known_file" '
+    local unwritten
+    unwritten="$(find "$vault" -name '*.md' -not -path '*/.git/*' -exec awk -v kf="$known_file" '
         FILENAME == kf { known[$0] = 1; next }
-        FNR == 1 { fence = 0; src = FILENAME; sub(/.*\//, "", src) }
+        FNR == 1 { fence = 0 }
         /^[ \t]*(```|~~~)/ { fence = !fence; next }
         fence { next }
         {
@@ -1546,15 +1564,19 @@ ai-mem-lint() {
                 if (t == "" || index(t, "{{")) continue
                 b = t; sub(/.*\//, "", b)
                 if ((t in known) || (b in known)) continue
-                print src " -> [[" t "]]"
+                print t
             }
-        }' "$known_file" {} + 2>/dev/null)"} )
+        }' "$known_file" {} + 2>/dev/null)"
     rm -f "$known_file"
-    local line
-    if (( $#dangling )); then
-        print -r -- "$#dangling dangling wikilink(s) -- a [[link]] that resolves to no note:"
-        for line in $dangling; do print -r -- "  $line"; done
-        (( issues += $#dangling ))
+    if [[ -n "$unwritten" ]]; then
+        # Most-linked first, ties by name; the top 10 only, with the total.
+        local n_links n_targets top
+        n_links="$(print -r -- "$unwritten" | wc -l | tr -d ' ')"
+        n_targets="$(print -r -- "$unwritten" | sort -u | wc -l | tr -d ' ')"
+        top="$(print -r -- "$unwritten" | sort | uniq -c | sort -k1,1nr -k2 | head -10 \
+            | awk '{ c = $1; sub(/^ *[0-9]+ /, ""); printf "%s[[%s]] %s", (NR > 1 ? ", " : ""), $0, c }')"
+        print -r -- "note: $n_links link(s) to $n_targets note(s) not written yet. Not errors -- Obsidian creates a note when its link is clicked. Write the most-linked first; find where one is used with: ai-mem-search '[[name]]'"
+        print -r -- "  most linked: $top"
     fi
     if (( issues == 0 )); then
         print -r -- "ok: vault links are clean"
