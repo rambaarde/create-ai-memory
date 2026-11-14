@@ -165,7 +165,7 @@ const INSTRUCTIONS = [
   readVaultNote('_Standards.md'),
   '',
   'get_context returns the loaded profile, standards, project context, and latest session digest. Its successful result is the context gate for this session.',
-  'search_memory may contain a prior solution. Search broadly first; use one distinctive word, not a whole sentence.',
+  'search_memory may contain a prior solution. Search a few distinctive words, not a whole sentence: the exact phrase is tried first, then each word, with notes holding more of them first.',
   '',
   'Write back with add_note for decisions, blockers, and next steps. Use add_lesson only for reusable knowledge that matters in a different project.',
   'If the user asks to see or browse memory, call open_graph.',
