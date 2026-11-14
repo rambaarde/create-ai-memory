@@ -1,0 +1,31 @@
+# PRs into develop and main are merged with a merge commit, and GitHub copies
+# the PR title into that commit's body. release-please reads the body, so a
+# Conventional Commit title ("feat: ...") adds the same change to CHANGELOG.md
+# once more for each merge (0.16.5, 0.17.0 and 0.18.0 each listed one change
+# 3 times: the source commit, the merge into develop, the merge into main).
+# The source commits already carry the Conventional Commit messages. The PR
+# title must therefore NOT be one.
+#
+# Exempt: the release-please Release PR. Its title is "chore(main): release ...",
+# and release-please does not put "chore" in the changelog.
+name: pr-title
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, edited, reopened, synchronize]
+jobs:
+  plain-title:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Same shape release-please parses: type, optional (scope), optional !, colon.
+          if printf '%s' "$TITLE" | grep -Eq '^[A-Za-z]+(\([^)]*\))?!?:'; then
+            echo "REFUSING: PR title \"$TITLE\" is a Conventional Commit." >&2
+            echo "The merge commit copies it, and release-please lists the change again." >&2
+            echo "Use a plain title, e.g. \"Release develop to main\" or \"Ranked search\"." >&2
+            exit 1
+          fi
+          echo "ok: plain PR title"
