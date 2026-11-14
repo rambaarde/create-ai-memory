@@ -337,6 +337,17 @@ has "$(<"$LESSON_FILE")" "token bucket beat fixed window" "ai-lesson appends the
 has "$(<"$LESSON_FILE")" "[[demoproj]]" "ai-lesson tags the entry with a project wikilink, not a plain bracket"
 ai-lesson "Rate Limiting!!" "second problem, same topic" "second solution" >/dev/null
 is "$(grep -c '^## ' "$LESSON_FILE")" "2" "ai-lesson slugifies the topic so a re-run appends to the same file"
+# Inside the vault the cwd names the vault's own repo, not a project: use the
+# active session's project, or refuse. The vault here is a git repo, as a real
+# backed-up vault is; that is where the old code tagged the repo's name.
+GITVAULT="$(mktemp -d)/vaultrepo"; mkdir -p "$GITVAULT/_Ai_Memory/_lessons"; git -C "$GITVAULT" init -q
+( cd "$GITVAULT/_Ai_Memory/_lessons" && AI_MEM_ROOT="$GITVAULT/_Ai_Memory" AI_MEM_ACTIVE_PROJECT=realproj \
+    ai-lesson in-vault-check "p" "s" >/dev/null 2>&1 )
+has "$(<"$GITVAULT/_Ai_Memory/_lessons/in-vault-check.md" 2>/dev/null)" "[[realproj]]" \
+  "ai-lesson run inside the vault tags the active session's project, not the vault repo"
+fails '( cd "$GITVAULT/_Ai_Memory/_lessons" && AI_MEM_ROOT="$GITVAULT/_Ai_Memory" AI_MEM_ACTIVE_PROJECT= ai-lesson in-vault-none "p" "s" )' \
+  "ai-lesson inside the vault with no active project refuses instead of guessing"
+is "$(find "$GITVAULT" -name 'in-vault-none.md' | wc -l | tr -d ' ')" "0" "the refused lesson writes no file"
 
 exists "$AI_MEM_ROOT/_lessons/_lesson_template.md" "install.sh seeds a _lesson_template.md, matching the project/session template pattern"
 LESSON_TEMPLATE_BACKUP="$(<"$AI_MEM_ROOT/_lessons/_lesson_template.md")"
@@ -826,7 +837,7 @@ exists "$_brok" "a log with unclosed frontmatter and a body is not archived as u
 
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 
-# --- 13d. ai-mem-lint flags dangling wikilinks (dead graph edges) ------------
+# --- 13d. ai-mem-lint ranks links to notes not written yet, not as errors ---
 _LINK_ROOT="$(mktemp -d)/_Ai_Memory"
 export AI_MEM_ROOT="$_LINK_ROOT"
 export AI_MEM_SESSION_DIR="$_LINK_ROOT/_session_logs"
@@ -834,20 +845,26 @@ export AI_MEM_PROJECT_DIR="$_LINK_ROOT/_projects"
 mkdir -p "$AI_MEM_PROJECT_DIR" "$_LINK_ROOT/_lessons"
 echo "# proj" > "$AI_MEM_PROJECT_DIR/proj.md"
 printf '# lesson\n\nSee [[proj]], [[proj|an alias]], and [[ghost-note]].\n' > "$_LINK_ROOT/_lessons/x.md"
+# ghost-note is linked twice and lone-note once, so ghost-note ranks first.
+printf '# other\n\n[[ghost-note]] and [[lone-note]]\n' > "$_LINK_ROOT/_lessons/y.md"
+# A session log links proj, so the vault has no real issue left.
+mkdir -p "$AI_MEM_SESSION_DIR/proj"
+print -rl -- "---" "type: ai-session-log" 'project: "[[proj]]"' "---" "body" > "$AI_MEM_SESSION_DIR/proj/proj-2026-01-01_00-00-00.md"
 # Not dead links: a shell test in a code span and in a fenced block, a
 # template placeholder, and a folder-path link to a note that exists.
 print -rl -- '# code' 'run `[[ -n $X ]]` first' '```sh' '[[ -f /tmp/y ]]' '```' \
   'template [[{{project_name}}]]' 'path [[_projects/proj]] and [[../_projects/proj]]' > "$_LINK_ROOT/_lessons/code.md"
-LINK_OUT="$(ai-mem-lint 2>/dev/null)"
-has   "$LINK_OUT" "dangling wikilink"       "ai-mem-lint reports a dangling wikilink"
-has   "$LINK_OUT" "[[ghost-note]]"          "ai-mem-lint names the dead link's target"
+LINK_OUT="$(ai-mem-lint 2>/dev/null)"; LINK_EXIT=$?
+has   "$LINK_OUT" "3 link(s) to 2 note(s) not written yet" "ai-mem-lint counts links to notes not written yet"
+has   "$LINK_OUT" "most linked: [[ghost-note]] 2, [[lone-note]] 1" "ai-mem-lint ranks them, most-linked first"
+is    "$LINK_EXIT" "0"                      "a link to a note not written yet is not a lint error"
+has   "$LINK_OUT" "ok: vault links are clean" "the vault is clean when only unwritten-note links remain"
 hasnt "$LINK_OUT" "[[proj]]"                "a wikilink that resolves is not flagged"
 hasnt "$LINK_OUT" "-n \$X"                  "a [[...]] inside inline code is not a wikilink"
 hasnt "$LINK_OUT" "-f /tmp/y"               "a [[...]] inside a fenced code block is not a wikilink"
 hasnt "$LINK_OUT" "{{project_name}}"        "a template placeholder is not a dangling link"
 hasnt "$LINK_OUT" "[[_projects/proj]]"      "a folder-path wikilink resolves by its last segment"
 hasnt "$LINK_OUT" "[[../_projects/proj]]"   "a relative folder-path wikilink resolves by its last segment"
-is "$(print -r -- "$LINK_OUT" | grep -c '^  ')" "1" "only the one real dead link is reported"
 hasnt "$LINK_OUT" "[[an alias]]"            "an aliased wikilink resolves on its target, not its alias"
 export AI_MEM_ROOT="$_SLEEP_OLD_ROOT"; export AI_MEM_SESSION_DIR="$_SLEEP_OLD_SESS"
 export AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR"
