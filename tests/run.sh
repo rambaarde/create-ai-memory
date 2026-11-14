@@ -1210,6 +1210,7 @@ LAZY_BODY="$(<"${LAZY_LOGS[1]:-/dev/null}")"
 has   "$LAZY_BODY" "first GUI note"             "the global log holds the first note"
 has   "$LAZY_BODY" "second GUI note"            "the global log holds the second note"
 has   "$LAZY_BODY" "type: ai-global-session"    "the global log uses the compact global type"
+has   "$LAZY_BODY" 'project: "[[_globalize_mem]]"' "the global log links its project note, so lint does not call it orphaned"
 hasnt "$LAZY_BODY" "Session Outcome"            "the global log does not use the repository template"
 
 # A new server links its log to the newest log with content. The old log is
@@ -1401,6 +1402,23 @@ AI_MEM_ROOT="$OKFVAULT" zsh -c '
   ai-mem-lint --fix
 ' >/dev/null 2>&1 || true
 has "$(<"$TMPL")" "type: ai-session-log" "--fix repairs the session log template"
+
+# --fix once printed "pname=<project>" to stdout: zsh prints a set local that
+# is declared again. A log whose previous: points into another project's
+# folder (a renamed project) resolves in Obsidian, so it is not dangling.
+LEAKV="$(mktemp -d)/_Ai_Memory"
+mkdir -p "$LEAKV/_projects" "$LEAKV/_session_logs/alpha" "$LEAKV/_session_logs/beta"
+echo "# alpha" > "$LEAKV/_projects/alpha.md"
+print -rl -- "---" "type: ai-session-log" "project: alpha" "---" "body" \
+  > "$LEAKV/_session_logs/alpha/alpha-2026-01-02_00-00-00.md"
+print -rl -- "---" "type: ai-session-log" 'project: "[[beta]]"' 'previous: "[[alpha-2026-01-02_00-00-00]]"' "---" "body" \
+  > "$LEAKV/_session_logs/beta/beta-2026-01-03_00-00-00.md"
+LEAK_OUT="$(AI_MEM_ROOT="$LEAKV" zsh -c '
+  source "'"$REPO_ROOT"'/shell/ai-mem.zsh"
+  ai-mem-lint --fix
+' 2>/dev/null)"
+hasnt "$LEAK_OUT" "pname=" "lint --fix prints no stray variable assignment"
+hasnt "$LEAK_OUT" "dangling previous link" "a previous link into another project's folder is not dangling"
 
 # --fix is the explicit route; this is the one that reaches people who never
 # run it. Vault scaffolding only fills in MISSING files -- correctly, since

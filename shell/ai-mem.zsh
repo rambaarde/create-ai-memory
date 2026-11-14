@@ -1098,6 +1098,8 @@ __ai_mem_current_project() {
 # Create a global (GUI/MCP) session log at $1 if it does not exist yet. Global
 # logs are created lazily, on the first write, so a read-only conversation
 # leaves no empty note behind. `previous:` links the newest log with content.
+# `project:` links the project note, as in a terminal session log: without it
+# ai-mem-lint reports the log as orphaned and the graph shows it unconnected.
 __ai_mem_create_global_log() {
     local session_note="$1" project_name="$2" previous prev_link=""
     [[ -f "$session_note" ]] && return 0
@@ -1105,7 +1107,8 @@ __ai_mem_create_global_log() {
     previous="$(__ai_mem_latest_session_log "$project_name")" || return 1
     [[ -n "$previous" ]] && prev_link="[[${previous:t:r}]]"
     mkdir -p "${session_note:h}"
-    print -rl -- "---" "type: ai-global-session" "date: $(date +%Y-%m-%d)" "previous: \"$prev_link\"" "---" "" "# Global Session Notes" > "$session_note"
+    print -rl -- "---" "type: ai-global-session" "date: $(date +%Y-%m-%d)" "project: \"[[$project_name]]\"" \
+        "previous: \"$prev_link\"" "---" "" "# Global Session Notes" > "$session_note"
 }
 
 __ai_mem_today_session_log() {
@@ -1388,7 +1391,9 @@ ai-mem-lint() {
     __ai_mem_paths
     local fix=0
     [[ "${1:-}" == "--fix" ]] && fix=1
-    local issues=0 f label target
+    # Declared once here: re-declaring a set local (`local pname` inside a
+    # loop or a later block) makes zsh print "pname=value" to stdout.
+    local issues=0 f label target pname otmp
     # Open Knowledge Format names exactly one required frontmatter field:
     # `type`. Every note the vault ships already declares one except session
     # logs, which predate the field -- so a vault that has been in use carries
@@ -1413,7 +1418,11 @@ ai-mem-lint() {
             # ai-mem-sleep moves older logs into the project's _archive/, and
             # Obsidian resolves a link by basename anywhere in the vault. A
             # link to an archived log still opens, so it is not dangling.
-            if [[ ! -f "${f:h}/${target}.md" && ! -f "${f:h}/_archive/${target}.md" ]]; then
+            # A project renamed mid-history links its first log to a log in
+            # the old project's folder; Obsidian resolves that by basename,
+            # so look vault-wide before calling it dangling (rare, so cheap).
+            if [[ ! -f "${f:h}/${target}.md" && ! -f "${f:h}/_archive/${target}.md" \
+                  && -z "$(find "$AI_MEM_SESSION_DIR" -name "${target}.md" -print -quit 2>/dev/null)" ]]; then
                 print -r -- "dangling previous link: $f -> [[${target}]] (not found)"
                 (( issues++ ))
             fi
@@ -1422,7 +1431,7 @@ ai-mem-lint() {
 
     while IFS= read -r -d '' f; do
         [[ "${f:t}" == "_project_template.md" ]] && continue
-        local pname="${f:t:r}"
+        pname="${f:t:r}"
         if ! grep -rq -- "\[\[${pname}\]\]" "$AI_MEM_SESSION_DIR" 2>/dev/null; then
             print -r -- "unreferenced project note (no session log links to it): $f"
             (( issues++ ))
@@ -1464,7 +1473,6 @@ ai-mem-lint() {
     done < <(find "$AI_MEM_SESSION_DIR" -maxdepth 2 -name "*.md" -print0 2>/dev/null)
 
     if (( $#orphan_files && fix )); then
-        local pname otmp
         for f in $orphan_files; do
             __ai_mem_guard "$f" >/dev/null || continue
             pname="$(grep -m1 '^project: ' "$f" | sed 's/^project: *//; s/^"//; s/"$//')"
