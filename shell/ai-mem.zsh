@@ -1877,8 +1877,9 @@ ai-mem-search() {
     local raw
     # --exclude-dir=_archive: session logs that ai-mem-sleep has retired are out
     # of the hot search path (their durable content lives on in a lesson). They
-    # stay in git and on disk, just not in a default search.
-    raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
+    # stay in git and on disk, just not in a default search. .ai-mem holds the
+    # recall log (see __ai_mem_log_recall), whose queries must not match.
+    raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude-dir=.ai-mem --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' -- "$term" "$search_root" 2>/dev/null)"
 
     # Exact phrase first, then each word. A multi-word term used to be one
     # literal phrase, so word order decided whether anything came back:
@@ -1895,7 +1896,7 @@ ai-mem-search() {
             local -a patterns
             local w
             for w in $words; do patterns+=(-e "$w"); done
-            raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' "${patterns[@]}" "$search_root" 2>/dev/null)"
+            raw="$(grep -rniF --exclude-dir=.git --exclude-dir=_archive --exclude-dir=.ai-mem --exclude='_session_template.md' --exclude='_project_template.md' --exclude='_lesson_template.md' "${patterns[@]}" "$search_root" 2>/dev/null)"
         else
             words=()
         fi
@@ -2023,6 +2024,7 @@ ai-mem-search() {
     print -r -- "$shown" \
         | sed "s|^${search_root}/||" \
         | awk '{ if (length($0) > 200) print substr($0, 1, 200) " [...]"; else print }'
+    [[ -z "$project" ]] && __ai_mem_log_recall "$term" "$shown"
 
     local shown_n
     shown_n="$(print -r -- "$shown" | wc -l | tr -d ' ')"
@@ -2134,4 +2136,89 @@ __ai_mem_search_rank_words() {
                 printf "%02d|%d|%09.4f|%03d|%s|%02d|%s\n", cov[p], lesson, score[p], lesson ? str[p] + 0 : 0, ts, LC[k], L[k]
             }
         }' <(print -r -- "$strengths") <(print -r -- "$raw") | sort -r | cut -d'|' -f7-
+}
+
+# Append one line per lesson that a whole-vault search SHOWED to the caller
+# (not every match: a hidden hit was not recalled). ai-mem-recall reads this to
+# answer the question the vault could not answer before: when a problem came
+# back, had the agent found the lesson for it? Columns, tab-separated:
+#   local time (YYYY-MM-DD HH:MM), epoch seconds, active project, slug, query.
+# Best-effort: a write failure never fails the search. The file lives in
+# .ai-mem/, which search, lint and the graph viewer all skip.
+# Args: <query> <shown result lines, absolute paths>.
+__ai_mem_log_recall() {
+    local query="$1" shown="$2" slugs
+    slugs="$(print -r -- "$shown" | awk -v pre="$AI_MEM_ROOT/_lessons/" '
+        index($0, pre) == 1 { s = substr($0, length(pre) + 1); sub(/\.md:[0-9]+:.*/, "", s)
+                              if (s !~ /\// && !(s in seen)) { seen[s] = 1; print s } }')"
+    [[ -n "$slugs" ]] || return 0
+    zmodload zsh/datetime 2>/dev/null
+    local dir="$AI_MEM_ROOT/.ai-mem" now epoch slug
+    now="$(strftime '%Y-%m-%d %H:%M' "$EPOCHSECONDS")"; epoch="$EPOCHSECONDS"
+    query="${${query//$'\t'/ }//$'\n'/ }"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    for slug in ${(f)slugs}; do
+        print -r -- "$now"$'\t'"$epoch"$'\t'"${AI_MEM_ACTIVE_PROJECT:-}"$'\t'"$slug"$'\t'"$query"
+    done >> "$dir/recall.tsv" 2>/dev/null
+    return 0
+}
+
+# ai-mem-recall: does the memory get used? Reads the recall log written by
+# ai-mem-search and the dated entries in _lessons/, from the first logged
+# search onward, and reports:
+#   - how many lessons searches surfaced, of how many exist;
+#   - each REPEAT entry (a second or later entry in an existing lesson, i.e.
+#     the same problem came back): was that lesson shown by a search in the
+#     24 hours before the entry was written? "found" means the memory did its
+#     job of surfacing the answer. "not found" means the answer was in the
+#     vault but the agent never saw it -- a recall miss, the number to drive
+#     down. Whether a found lesson then helped cannot be read from files.
+# ponytail: a fixed 24h window stands in for "the same session"; a session
+# id in both the log and the lesson entry is the upgrade if the window misleads.
+ai-mem-recall() {
+    __ai_mem_paths
+    zmodload zsh/datetime 2>/dev/null
+    local log="$AI_MEM_ROOT/.ai-mem/recall.tsv"
+    if [[ ! -s "$log" ]]; then
+        print -r -- "ai-mem-recall: no searches logged yet. ai-mem-search records each lesson it shows; run this again after some sessions."
+        return 0
+    fi
+    local start
+    start="$(head -1 "$log" | cut -f1)"
+    # Dated entries since logging began: <slug> <entry index> <YYYY-MM-DD HH:MM>.
+    local -a rows
+    rows=( ${(f)"$(find "$AI_MEM_ROOT/_lessons" -maxdepth 1 -name '*.md' ! -name '_lesson_template.md' -exec awk -v start="$start" '
+        FNR == 1 { n = 0; s = FILENAME; sub(/.*\//, "", s); sub(/\.md$/, "", s) }
+        /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]/ {
+            n++; t = substr($0, 4, 16); if (t >= start) print s "\t" n "\t" t; next }
+        /^## [0-9]/ { n++ }
+        ' {} + 2>/dev/null)"} )
+    local row t
+    local entries=""
+    for row in $rows; do
+        t="${row##*$'\t'}"
+        entries+="$row"$'\t'"$(strftime -r '%Y-%m-%d %H:%M' "$t" 2>/dev/null || print 0)"$'\n'
+    done
+    local total
+    total="$(find "$AI_MEM_ROOT/_lessons" -maxdepth 1 -name '*.md' ! -name '_lesson_template.md' | wc -l | tr -d ' ')"
+    awk -F'\t' -v total="$total" -v start="$start" '
+        FNR == NR { if ($4 != "") { surfaced[$4] = 1; at[$4, ++k[$4]] = $2; searches[$2 "\t" $5] = 1 } next }
+        $1 == "" { next }
+        $2 == 1 { new++; next }
+        {
+            rep++; hit = 0
+            # +60: entry times are whole minutes, so a search in the same
+            # minute can carry a later epoch than the entry heading.
+            for (i = 1; i <= k[$1]; i++) if (at[$1, i] <= $4 + 60 && at[$1, i] >= $4 - 86400) { hit = 1; break }
+            if (hit) found++; else { missed++; miss = miss "\n  " $1 " (" $3 ")" }
+        }
+        END {
+            ns = 0; for (s in searches) ns++
+            nl = 0; for (s in surfaced) nl++
+            print "recall since " start " (first logged search)"
+            print "  searches that showed a lesson: " ns "; lessons shown: " nl " of " total
+            print "  lesson entries written since: " new + rep " (" new + 0 " new lesson(s), " rep + 0 " repeat(s) of an existing lesson)"
+            if (rep) print "  repeats found by a search in the 24h before: " found + 0 " of " rep "; not found (recall misses): " missed + 0
+            if (missed) print "recall misses -- the lesson existed but no search showed it:" miss
+        }' "$log" <(print -rn -- "$entries")
 }

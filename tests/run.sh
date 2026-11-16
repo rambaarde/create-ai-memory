@@ -1037,6 +1037,32 @@ AI_MEM_ROOT="$_OLD_AI_MEM_ROOT"
 AI_MEM_SESSION_DIR="$_OLD_SESSION_DIR2"
 AI_MEM_PROJECT_DIR="$_OLD_PROJECT_DIR2"
 
+# --- recall log: does a returning problem find its lesson? -----------------
+# ai-mem-search logs each lesson it SHOWS; ai-mem-recall then splits repeat
+# lesson entries into "found by a search first" and "recall misses".
+RECV="$(mktemp -d)/_Ai_Memory"; mkdir -p "$RECV/_lessons" "$RECV/_session_logs" "$RECV/_projects"
+_RC_ROOT="$AI_MEM_ROOT"; _RC_SESS="$AI_MEM_SESSION_DIR"; _RC_PROJ="$AI_MEM_PROJECT_DIR"
+AI_MEM_ROOT="$RECV"; AI_MEM_SESSION_DIR="$RECV/_session_logs"; AI_MEM_PROJECT_DIR="$RECV/_projects"
+has "$(ai-mem-recall)" "no searches logged yet" "ai-mem-recall says so when nothing is logged"
+print -rl -- "# found-me" "" "## 2026-01-01 10:00 [[p]]" "" "### Problem" "quokka shadow database" > "$RECV/_lessons/found-me.md"
+print -rl -- "# missed-me" "" "## 2026-01-01 10:00 [[p]]" "" "### Problem" "zebra webhook retries" > "$RECV/_lessons/missed-me.md"
+print -r -- "quokka in a session log" > "$RECV/_session_logs/note.md"
+ai-mem-search "quokka" >/dev/null
+RC_LOG="$(<"$RECV/.ai-mem/recall.tsv")"
+has   "$RC_LOG" "found-me"     "ai-mem-search logs a lesson it showed"
+hasnt "$RC_LOG" "missed-me"    "ai-mem-search does not log a lesson it did not show"
+hasnt "$RC_LOG" "note"         "ai-mem-search logs lessons only, not other notes"
+hasnt "$(ai-mem-search "quokka")" ".ai-mem/" "the recall log never appears in search results"
+ai-lesson found-me "quokka again" "fix" >/dev/null
+ai-lesson missed-me "zebra again" "fix" >/dev/null
+ai-lesson brand-new "first time" "fix" >/dev/null
+RC_OUT="$(ai-mem-recall)"
+has "$RC_OUT" "1 new lesson(s), 2 repeat(s)" "ai-mem-recall separates new lessons from repeats"
+has "$RC_OUT" "found by a search in the 24h before: 1 of 2; not found (recall misses): 1" \
+  "a repeat whose lesson a search showed counts as found, the other as a miss"
+has "$RC_OUT" "  missed-me (" "ai-mem-recall names the lesson that was missed"
+AI_MEM_ROOT="$_RC_ROOT"; AI_MEM_SESSION_DIR="$_RC_SESS"; AI_MEM_PROJECT_DIR="$_RC_PROJ"
+
 # --- graph server ------------------------------------------------------------
 # The vault is already a graph: notes with a `type` and wikilinks between them.
 # These assert the shape it serves, and that the note route cannot be talked
