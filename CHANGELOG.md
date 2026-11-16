@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/rambaarde/create-ai-memory/compare/v0.18.2...v0.19.0) (2026-11-16)
+
+
+### Features
+
+* **recall:** log lessons that search shows and report recall misses ([9d234b8](https://github.com/rambaarde/create-ai-memory/commit/9d234b82412a607e915ecc61532b8791ab0616fd))
+
 ## [0.18.2](https://github.com/rambaarde/create-ai-memory/compare/v0.18.1...v0.18.2) (2026-11-14)
 
 
