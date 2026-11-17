@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/rambaarde/create-ai-memory/compare/v0.19.0...v0.19.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **agents:** put ai-lesson, ai-note and ai-mem-lint on the agent's PATH ([faa9766](https://github.com/rambaarde/create-ai-memory/commit/faa976611fc24ac43cbb01fdfb3efa38f49439a1))
+
 ## [0.19.0](https://github.com/rambaarde/create-ai-memory/compare/v0.18.2...v0.19.0) (2026-11-16)
 
 
