@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Run the canonical zsh implementation from non-interactive agent shells.
+# OMP and similar harnesses do not inherit interactive zsh functions. Without
+# this file an agent told to run ai-lesson wrote the lesson by hand: no entry
+# time (so ai-mem-recall could not count it), no vault backup.
+set -e
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+MODULE="$SCRIPT_DIR/../shell/ai-mem.zsh"
+
+exec zsh -f -c 'source "$1"; shift; ai-lesson "$@"' \
+    ai-lesson "$MODULE" "$@"
