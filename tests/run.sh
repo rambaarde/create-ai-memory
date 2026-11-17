@@ -1063,6 +1063,23 @@ has "$RC_OUT" "found by a search in the 24h before: 1 of 2; not found (recall mi
 has "$RC_OUT" "  missed-me (" "ai-mem-recall names the lesson that was missed"
 AI_MEM_ROOT="$_RC_ROOT"; AI_MEM_SESSION_DIR="$_RC_SESS"; AI_MEM_PROJECT_DIR="$_RC_PROJ"
 
+# --- agent shells reach the memory commands the prompt names ---------------
+# OMP/T3 put bin/ on the agent's PATH, but an agent shell is plain bash with no
+# zsh functions. Only ai-mem-search had an executable, so an agent told to run
+# ai-lesson wrote the lesson by hand: no entry time, no backup.
+for _cmd in ai-mem-search ai-lesson ai-note ai-mem-lint; do
+  [[ -x "$REPO_ROOT/bin/$_cmd" ]] && ok "bin/$_cmd is executable for agent shells" \
+    || nok "bin/$_cmd is executable for agent shells (missing or not executable)"
+done
+WRAPV="$(mktemp -d)/_Ai_Memory"; mkdir -p "$WRAPV/_lessons" "$WRAPV/_session_logs" "$WRAPV/_projects"
+WRAPR="$(mktemp -d)/wrapproj"; mkdir -p "$WRAPR"; git -C "$WRAPR" init -q
+( cd "$WRAPR" && env -i HOME="$HOME" PATH="$REPO_ROOT/bin:/usr/bin:/bin:${commands[zsh]:h}" AI_MEM_ROOT="$WRAPV" \
+    bash -c 'ai-lesson wrap-check "p" "s"' >/dev/null 2>&1 )
+has "$(<"$WRAPV/_lessons/wrap-check.md" 2>/dev/null)" "[[wrapproj]]" \
+  "bin/ai-lesson works from a plain bash shell with no zsh functions loaded"
+has "$(grep '^## ' "$WRAPV/_lessons/wrap-check.md" 2>/dev/null)" ":" \
+  "a lesson written through bin/ai-lesson carries an entry time, which ai-mem-recall needs"
+
 # --- graph server ------------------------------------------------------------
 # The vault is already a graph: notes with a `type` and wikilinks between them.
 # These assert the shape it serves, and that the note route cannot be talked
